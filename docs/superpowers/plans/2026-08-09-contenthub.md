@@ -4,9 +4,9 @@
 
 **Goal:** Build a multi-user web app where users pick interests, get AI-discovered sources to follow, and read a single unified feed of new content from those sources — no manual RSS management, no jumping between sites.
 
-**Architecture:** Next.js (App Router) frontend talks directly to Supabase (Postgres + Auth) for user-owned CRUD, protected by Row Level Security. Two n8n workflows do the heavy lifting outside the request/response cycle: a Discovery workflow (triggered when a user adds an interest, calls Gemini to find candidate sources) and a scheduled Ingestion workflow (RSS-first polling of followed sources). Both workflows write back through thin Supabase Edge Functions that own the business logic (dedup, upsert, failure tracking) — n8n never talks to Postgres directly.
+**Architecture:** Next.js (App Router) frontend talks directly to Supabase (Postgres + Auth) for user-owned CRUD, protected by Row Level Security. Two n8n workflows do the heavy lifting outside the request/response cycle: a Discovery workflow (triggered when a user adds an interest, calls Claude to find candidate sources) and a scheduled Ingestion workflow (RSS-first polling of followed sources). Both workflows write back through thin Supabase Edge Functions that own the business logic (dedup, upsert, failure tracking) — n8n never talks to Postgres directly.
 
-**Tech Stack:** Next.js 14 (App Router, TypeScript), Tailwind CSS, Supabase (Postgres, Auth, Edge Functions on Deno), `@supabase/supabase-js` v2, `@supabase/ssr`, `@supabase/auth-ui-react`, Vitest + Testing Library (frontend tests), Deno test runner (edge function tests), n8n (existing instance), Google Gemini API (discovery — chosen over Claude for cost/free-tier token headroom).
+**Tech Stack:** Next.js 14 (App Router, TypeScript), Tailwind CSS, Supabase (Postgres, Auth, Edge Functions on Deno), `@supabase/supabase-js` v2, `@supabase/ssr`, `@supabase/auth-ui-react`, Vitest + Testing Library (frontend tests), Deno test runner (edge function tests), n8n (existing instance), Anthropic Claude API — `claude-haiku-4-5` (discovery; cheapest tier, more than sufficient for a short source-suggestion prompt — tried Gemini first but its free tier's rate limit blocked us and the paid tier required an upfront deposit not worth it for this workload).
 
 ## Global Constraints
 
@@ -872,19 +872,20 @@ In Supabase Dashboard → Database → Webhooks: create a webhook on `user_inter
 Create nodes in order:
 1. **Webhook** (trigger) — Method: POST, Path: `discovery-trigger`, Respond: Immediately. This is the URL you set as `N8N_DISCOVERY_WEBHOOK_URL` in Task 4.
 2. **HTTP Request** ("Get interest label") — GET `{{$env.SUPABASE_URL}}/rest/v1/interests?id=eq.{{$json.body.interest_id}}&select=label`, headers `apikey` and `Authorization: Bearer {{$env.SUPABASE_SERVICE_ROLE_KEY}}`.
-3. **HTTP Request** ("Ask Gemini") — POST `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`, header `x-goog-api-key: {{$env.GEMINI_API_KEY}}`. Body:
+3. **HTTP Request** ("Ask Claude") — POST `https://api.anthropic.com/v1/messages`, headers `x-api-key: {{$env.ANTHROPIC_API_KEY}}`, `anthropic-version: 2023-06-01`. Body:
    ```json
    {
-     "contents": [{
-       "parts": [{
-         "text": "\"{{$json[0].label}}\" konusunda aktif, takip edilebilir 5 kaynak öner (blog, YouTube kanalı, akademik kaynak). Sadece şu JSON formatında cevap ver, başka metin ekleme: [{\"type\":\"blog|youtube|academic\",\"name\":\"...\",\"url_or_handle\":\"...\",\"platform\":\"...\"}]"
-       }]
-     }],
-     "tools": [{"google_search": {}}]
+     "model": "claude-haiku-4-5",
+     "max_tokens": 1024,
+     "tools": [{"type": "web_search_20250305", "name": "web_search"}],
+     "messages": [{
+       "role": "user",
+       "content": "\"{{$json[0].label}}\" konusunda aktif, takip edilebilir 5 kaynak öner (blog, YouTube kanalı, akademik kaynak). Sadece şu JSON formatında cevap ver, başka metin ekleme: [{\"type\":\"blog|youtube|academic\",\"name\":\"...\",\"url_or_handle\":\"...\",\"platform\":\"...\"}]"
+     }]
    }
    ```
-   The `google_search` tool grounds Gemini's answer in current web results — the free-tier equivalent of Claude's `web_search` tool used in the original design.
-4. **Code** ("Parse candidates") — extract the JSON array from Gemini's response text (`response.candidates[0].content.parts[0].text`; strip markdown fences if present with a regex), attach `user_id` and `interest_id` from the original webhook body.
+   `web_search_20250305` is the basic (non-dynamic-filtering) web search tool variant — the right one for Haiku 4.5, which doesn't support the newer `_20260209` dynamic-filtering variant reserved for Opus/Sonnet-tier models.
+4. **Code** ("Parse candidates") — Claude's `content` array mixes `web_search_tool_result` blocks with `text` blocks when the model used search; find the **last** block with `type: "text"` and parse its `.text` as JSON (strip markdown fences with a regex if present), attach `user_id` and `interest_id` from the original webhook body.
 5. **HTTP Request** ("Post to discovery-webhook") — POST to the deployed `discovery-webhook` function URL, header `x-webhook-secret: {{$env.N8N_WEBHOOK_SECRET}}`, body `{{$json}}` (the object built in step 4: `user_id`, `interest_id`, `candidates`). In node Settings, enable **"Retry On Fail"** with 3 attempts and a wait time of 5s (doubling each retry) — this is the "webhook güvenilirliği" retry from the design doc.
 
 - [ ] **Step 3: Manually verify end-to-end**
