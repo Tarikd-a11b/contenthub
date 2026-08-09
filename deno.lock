@@ -1,0 +1,49 @@
+{
+  "version": "5",
+  "specifiers": {
+    "jsr:@std/assert@*": "1.0.19",
+    "jsr:@std/internal@^1.0.12": "1.0.14",
+    "jsr:@supabase/supabase-js@2": "2.112.2"
+  },
+  "jsr": {
+    "@std/assert@1.0.19": {
+      "integrity": "eaada96ee120cb980bc47e040f82814d786fe8162ecc53c91d8df60b8755991e",
+      "dependencies": [
+        "jsr:@std/internal"
+      ]
+    },
+    "@std/internal@1.0.14": {
+      "integrity": "291516b3d4c35024d6ffbc0a9df5bf4c64116e05b50012cf846710152d2ffdf7"
+    },
+    "@supabase/supabase-js@2.112.2": {
+      "integrity": "6462b34553f02db1534f534318b0abf46a4d20994e93725233dab75ebbf78b7f"
+    }
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@supabase/auth-ui-react@~0.4.7",
+        "npm:@supabase/auth-ui-shared@~0.1.8",
+        "npm:@supabase/ssr@~0.12.4",
+        "npm:@supabase/supabase-js@^2.112.2",
+        "npm:@testing-library/jest-dom@7",
+        "npm:@testing-library/react@^16.3.2",
+        "npm:@types/node@20",
+        "npm:@types/react-dom@18",
+        "npm:@types/react@18",
+        "npm:@vitejs/plugin-react@^6.0.5",
+        "npm:dotenv@^17.4.2",
+        "npm:eslint-config-next@14.2.35",
+        "npm:eslint@8",
+        "npm:jsdom@^30.0.1",
+        "npm:next@14.2.35",
+        "npm:postcss@8",
+        "npm:react-dom@18",
+        "npm:react@18",
+        "npm:tailwindcss@^3.4.1",
+        "npm:typescript@5",
+        "npm:vitest@^4.1.10"
+      ]
+    }
+  }
+}
