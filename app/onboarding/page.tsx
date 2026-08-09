@@ -24,15 +24,21 @@ export default function OnboardingPage() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const next = new Set(selected);
-    if (next.has(interestId)) {
-      next.delete(interestId);
+    const isSelected = selected.has(interestId);
+    if (isSelected) {
       await supabase.from('user_interests').delete().eq('user_id', user.id).eq('interest_id', interestId);
     } else {
-      next.add(interestId);
       await supabase.from('user_interests').insert({ user_id: user.id, interest_id: interestId });
     }
-    setSelected(next);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (isSelected) {
+        next.delete(interestId);
+      } else {
+        next.add(interestId);
+      }
+      return next;
+    });
   }
 
   async function addCustomInterest() {
