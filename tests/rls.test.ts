@@ -16,12 +16,8 @@ async function createTestUser(email: string) {
     email,
     password: PASSWORD,
     email_confirm: true,
-    autoConfirmUser: true,
   });
-  if (error) {
-    console.error('Auth error details:', JSON.stringify(error, null, 2));
-    throw error;
-  }
+  if (error) throw error;
   return data.user!;
 }
 
