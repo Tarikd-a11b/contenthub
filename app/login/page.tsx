@@ -23,7 +23,11 @@ export default function LoginPage() {
   return (
     <div className="mx-auto mt-20 max-w-sm">
       <h1 className="mb-6 text-2xl font-semibold">ContentHub&apos;a giriş yap</h1>
-      <Auth supabaseClient={supabase} appearance={{ theme: ThemeSupa }} />
+      <Auth
+        supabaseClient={supabase}
+        appearance={{ theme: ThemeSupa }}
+        redirectTo={typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined}
+      />
     </div>
   );
 }
