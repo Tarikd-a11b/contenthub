@@ -11,55 +11,86 @@ export default function OnboardingPage() {
   const [interests, setInterests] = useState<Interest[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [customLabel, setCustomLabel] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
+  }, [supabase]);
 
   useEffect(() => {
     supabase
       .from('interests')
       .select('id, label, is_preset')
       .order('is_preset', { ascending: false })
-      .then(({ data }) => setInterests(data ?? []));
+      .then(({ data, error }) => {
+        if (error) setError(error.message);
+        setInterests(data ?? []);
+      });
   }, [supabase]);
 
-  async function toggleInterest(interestId: string) {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from('user_interests')
+      .select('interest_id')
+      .eq('user_id', userId)
+      .then(({ data, error }) => {
+        if (error) setError(error.message);
+        setSelected(new Set((data ?? []).map((row) => row.interest_id)));
+      });
+  }, [supabase, userId]);
 
-    const isSelected = selected.has(interestId);
-    if (isSelected) {
-      await supabase.from('user_interests').delete().eq('user_id', user.id).eq('interest_id', interestId);
-    } else {
-      await supabase.from('user_interests').insert({ user_id: user.id, interest_id: interestId });
-    }
-    setSelected((prev) => {
-      const next = new Set(prev);
+  async function toggleInterest(interestId: string) {
+    if (!userId) return;
+
+    try {
+      const isSelected = selected.has(interestId);
       if (isSelected) {
-        next.delete(interestId);
+        await supabase.from('user_interests').delete().eq('user_id', userId).eq('interest_id', interestId);
       } else {
-        next.add(interestId);
+        await supabase.from('user_interests').insert({ user_id: userId, interest_id: interestId });
       }
-      return next;
-    });
+      setSelected((prev) => {
+        const next = new Set(prev);
+        if (isSelected) {
+          next.delete(interestId);
+        } else {
+          next.add(interestId);
+        }
+        return next;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bir hata oluştu');
+    }
   }
 
   async function addCustomInterest() {
-    const label = normalizeInterestLabel(customLabel);
-    if (!label) return;
+    if (!userId) return;
 
-    const { data: existing } = await supabase.from('interests').select('id').eq('label', label).maybeSingle();
-    const interestId = existing?.id ?? (
-      await supabase.from('interests').insert({ label, is_preset: false }).select('id').single()
-    ).data?.id;
+    try {
+      const label = normalizeInterestLabel(customLabel);
+      if (!label) return;
 
-    if (interestId) {
-      setInterests((prev) => (prev.some((i) => i.id === interestId) ? prev : [...prev, { id: interestId, label, is_preset: false }]));
-      await toggleInterest(interestId);
+      const { data: existing } = await supabase.from('interests').select('id').ilike('label', label).maybeSingle();
+      const interestId = existing?.id ?? (
+        await supabase.from('interests').insert({ label, is_preset: false }).select('id').single()
+      ).data?.id;
+
+      if (interestId) {
+        setInterests((prev) => (prev.some((i) => i.id === interestId) ? prev : [...prev, { id: interestId, label, is_preset: false }]));
+        await toggleInterest(interestId);
+      }
+      setCustomLabel('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bir hata oluştu');
     }
-    setCustomLabel('');
   }
 
   return (
     <div className="mx-auto mt-16 max-w-lg">
       <h1 className="mb-4 text-2xl font-semibold">İlgi alanlarını seç</h1>
+      {error && <p className="text-sm text-red-600">{error}</p>}
       <div className="mb-6 flex flex-wrap gap-2">
         {interests.map((interest) => (
           <button

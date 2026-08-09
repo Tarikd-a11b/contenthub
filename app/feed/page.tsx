@@ -8,6 +8,7 @@ export default function FeedPage() {
   const supabase = createClient();
   const [items, setItems] = useState<FeedItem[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
@@ -17,19 +18,29 @@ export default function FeedPage() {
     if (!userId) return;
 
     async function load() {
-      const { data: follows } = await supabase.from('follows').select('source_id').eq('user_id', userId);
+      const { data: follows, error: followsError } = await supabase.from('follows').select('source_id').eq('user_id', userId);
+      if (followsError) setError(followsError.message);
       const sourceIds = (follows ?? []).map((f) => f.source_id);
       if (sourceIds.length === 0) return setItems([]);
 
-      const { data: contentRows } = await supabase
+      const { data: contentRows, error: contentError } = await supabase
         .from('content_items')
         .select('id, title, url, published_at, content_type, sources(name)')
-        .in('source_id', sourceIds);
+        .in('source_id', sourceIds)
+        .order('published_at', { ascending: false })
+        .limit(100);
+      if (contentError) setError(contentError.message);
 
-      const { data: statusRows } = await supabase
-        .from('user_content_status')
-        .select('content_item_id, read_at')
-        .eq('user_id', userId);
+      const contentIds = (contentRows ?? []).map((row) => row.id);
+
+      const { data: statusRows, error: statusError } = contentIds.length > 0
+        ? await supabase
+            .from('user_content_status')
+            .select('content_item_id, read_at')
+            .eq('user_id', userId)
+            .in('content_item_id', contentIds)
+        : { data: [], error: null };
+      if (statusError) setError(statusError.message);
       const readIds = new Set((statusRows ?? []).filter((r) => r.read_at).map((r) => r.content_item_id));
 
       const feedItems: FeedItem[] = (contentRows ?? []).map((row) => ({
@@ -51,13 +62,18 @@ export default function FeedPage() {
 
   async function handleRead(item: FeedItem) {
     if (!userId) return;
-    await markAsRead(supabase, userId, item.id);
-    setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, is_read: true } : i)));
+    try {
+      await markAsRead(supabase, userId, item.id);
+      setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, is_read: true } : i)));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bir hata oluştu');
+    }
   }
 
   return (
     <div className="mx-auto mt-16 max-w-2xl space-y-3">
       <h1 className="text-2xl font-semibold">Akış</h1>
+      {error && <p className="text-sm text-red-600">{error}</p>}
       {items.length === 0 && <p className="text-gray-500">Henüz içerik yok — bir kaynak takip et.</p>}
       {items.map((item) => (
         <a
