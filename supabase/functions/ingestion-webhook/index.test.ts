@@ -50,3 +50,12 @@ Deno.test('marks a source broken after 3 failures', async () => {
   const updateCall = supabase.calls.find((c: { table: string; op: string }) => c.table === 'sources' && c.op === 'update');
   assertEquals((updateCall!.payload as { status: string }).status, 'broken');
 });
+
+Deno.test('resets fail_count and reactivates a source on success', async () => {
+  const supabase = fakeSupabase(0, 2);
+
+  await handleIngestionPayload(supabase, { items: [], succeeded_source_ids: ['s1'] });
+
+  const updateCall = supabase.calls.find((c: { table: string; op: string }) => c.table === 'sources' && c.op === 'update');
+  assertEquals(updateCall!.payload, { fail_count: 0, status: 'active' });
+});

@@ -57,7 +57,11 @@ if (import.meta.main) {
     const payload: DiscoveryPayload = await req.json();
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const results = await handleDiscoveryPayload(supabase, payload);
+    const hasError = results.some((r) => r.error !== null);
 
-    return new Response(JSON.stringify({ results }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ results }), {
+      status: hasError ? 500 : 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
   });
 }

@@ -6,6 +6,7 @@ const SHARED_SECRET = Deno.env.get('N8N_WEBHOOK_SECRET') ?? '';
 type IngestionPayload = {
   items: Array<{ source_id: string; title: string; url: string; published_at: string; content_type: string; summary?: string }>;
   failed_source_ids?: string[];
+  succeeded_source_ids?: string[];
 };
 
 export async function handleIngestionPayload(
@@ -22,6 +23,10 @@ export async function handleIngestionPayload(
       .select();
     if (error) throw error;
     inserted = data?.length ?? 0;
+  }
+
+  for (const sourceId of payload.succeeded_source_ids ?? []) {
+    await supabase.from('sources').update({ fail_count: 0, status: 'active' }).eq('id', sourceId);
   }
 
   for (const sourceId of payload.failed_source_ids ?? []) {
