@@ -236,7 +236,7 @@ git commit -m "feat: add ContentHub database schema with RLS policies"
 
 - [ ] **Step 1: Scaffold the Next.js project**
 
-Run: `npx create-next-app@14 . --typescript --tailwind --app --eslint --src-dir=false --import-alias "@/*"`
+Run: `npx create-next-app@14 . --typescript --tailwind --eslint --no-src-dir --import-alias "@/*"`
 Then: `npm install @supabase/supabase-js @supabase/ssr @supabase/auth-ui-react @supabase/auth-ui-shared`
 Then: `npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom`
 
