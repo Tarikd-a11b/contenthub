@@ -865,7 +865,7 @@ git commit -m "feat: add ingestion-webhook edge function"
 
 - [ ] **Step 1: Wire the Supabase Database Webhook**
 
-In Supabase Dashboard → Database → Webhooks: create a webhook on `user_interests`, event `INSERT`, target = the deployed `trigger-discovery` function URL.
+In Supabase Dashboard → Database → Webhooks: create a webhook on `user_interests`, event `INSERT`, target = the deployed `trigger-discovery` function URL. `trigger-discovery` now requires the same `x-webhook-secret` header as its sibling Edge Functions (added in the final-review fix wave, since the function is otherwise reachable by anyone once deployed) — add a custom HTTP header `x-webhook-secret: <value of N8N_WEBHOOK_SECRET>` to this Database Webhook's configuration, or it will get 401s.
 
 - [ ] **Step 2: Build the workflow in n8n**
 
@@ -923,10 +923,10 @@ Create nodes in order:
    - **blog** → **RSS Read** node, URL = `{{$json.url_or_handle}}`.
    - **youtube** → **Code** node computing `https://www.youtube.com/feeds/videos.xml?channel_id=` + channel ID parsed from `url_or_handle` → **RSS Read** node with that URL.
    - **academic** → **HTTP Request** GET to the arXiv API query stored in `url_or_handle`.
-   - Enable **"Continue On Fail"** on each fetch node so one broken feed doesn't stop the loop; route its error output to a **Code** node that appends the source id to a `failedSourceIds` array (use a static/workflow variable or a **Merge** node accumulating across iterations). Also enable **"Retry On Fail"** (3 attempts, 5s wait doubling) on the `academic` branch's HTTP Request node, since arXiv's API is the one call in this workflow subject to rate limiting.
+   - Enable **"Continue On Fail"** on each fetch node so one broken feed doesn't stop the loop; route its error output to a **Code** node that appends the source id to a `failedSourceIds` array (use a static/workflow variable or a **Merge** node accumulating across iterations). Also enable **"Retry On Fail"** (3 attempts, 5s wait doubling) on the `academic` branch's HTTP Request node, since arXiv's API is the one call in this workflow subject to rate limiting. Also accumulate a `succeededSourceIds` array (every source id that reached its fetch node without error, whether or not it produced new items) — the `ingestion-webhook` Edge Function uses this to reset `fail_count`/reactivate a source that used to be flaky but is healthy again (added in the final-review fix wave).
 6. **Code** ("Normalize items", after each branch) — map feed entries to `{source_id, title, url, published_at, content_type, summary: null}`.
 7. After the Split In Batches loop completes, use a **Merge**/**Aggregate** node to collect all normalized items and all failed source ids from every iteration into one payload.
-8. **HTTP Request** ("Post to ingestion-webhook") — POST to the deployed `ingestion-webhook` function URL, header `x-webhook-secret: {{$env.N8N_WEBHOOK_SECRET}}`, body `{ "items": {{$json.items}}, "failed_source_ids": {{$json.failedSourceIds}} }`. In node Settings, enable **"Retry On Fail"** with 3 attempts and a wait time of 5s (doubling each retry).
+8. **HTTP Request** ("Post to ingestion-webhook") — POST to the deployed `ingestion-webhook` function URL, header `x-webhook-secret: {{$env.N8N_WEBHOOK_SECRET}}`, body `{ "items": {{$json.items}}, "failed_source_ids": {{$json.failedSourceIds}}, "succeeded_source_ids": {{$json.succeededSourceIds}} }`. In node Settings, enable **"Retry On Fail"** with 3 attempts and a wait time of 5s (doubling each retry).
 
 - [ ] **Step 2: Manually verify end-to-end**
 
