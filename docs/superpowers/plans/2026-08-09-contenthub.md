@@ -856,6 +856,8 @@ git commit -m "feat: add ingestion-webhook edge function"
 
 ## Task 7: n8n Discovery workflow
 
+> **AS BUILT (2026-08-09):** Completed and verified end-to-end, but via a different path than the steps below — built programmatically through the n8n REST API rather than by hand in the editor, and two of the plan's assumptions turned out to be wrong on this project. Full detail (exact deviations, why, and the verification result) is in the SDD ledger at `.superpowers/sdd/2026-08-09-contenthub/progress.md`. Summary: Supabase's Database Webhooks UI is broken on this project (missing `supabase_functions` schema) — replaced with a `pg_net` trigger created directly via SQL (not committed, lives only in the hosted DB). All three Edge Functions needed `--no-verify-jwt` redeployment since Supabase's platform-level JWT gate sits in front of our own `x-webhook-secret` check. The n8n instance is local-only, so it's exposed through an ephemeral `localtunnel` tunnel for testing — not a durable solution; a real deployment needs n8n hosted somewhere internet-reachable. Model is `claude-haiku-4-5`, not the `gemini-2.0-flash` this section originally referenced further down before the switch back to Claude (see the "Ask Claude" step below, already corrected).
+
 **Files:**
 - None (configured in the n8n editor). Record the exported workflow as `n8n/discovery-workflow.json` for reference after building it.
 
