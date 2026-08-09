@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Node.js 18+, Next.js 14 App Router, TypeScript throughout.
-- Supabase CLI required locally for schema migrations and local dev (`supabase start` / `supabase db reset`).
+- No local Docker/Supabase CLI login available in this environment. The project uses a hosted Supabase project (ref `tigawsmrndalzvuyjycc`). Migrations are applied by pasting the SQL into the Supabase Dashboard SQL Editor (human step) rather than `supabase db reset`. Credentials live in a git-ignored `.env.local` at the repo root, provided by the human partner (never printed, never committed): `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Tests that need real Supabase access load it via `import 'dotenv/config'` (package `dotenv`, add to devDependencies in Task 1).
 - All tables have Row Level Security enabled; users only ever read/write their own rows directly. `sources` and `content_items` are shared/read-only to clients — only Edge Functions (service role) write to them.
 - n8n → Supabase Edge Function calls are authenticated with a shared secret header `x-webhook-secret`, value from env var `N8N_WEBHOOK_SECRET` (set identically in both n8n credentials and Supabase Edge Function secrets).
 - YouTube ingestion uses the free channel RSS feed (`https://www.youtube.com/feeds/videos.xml?channel_id=...`), never the paid/quota-limited YouTube Data API.
@@ -20,208 +20,7 @@
 
 ---
 
-## Task 1: Database schema and RLS policies
-
-**Files:**
-- Create: `supabase/migrations/0001_init_schema.sql`
-- Test: `tests/rls.test.ts`
-
-**Interfaces:**
-- Produces: tables `profiles`, `interests`, `user_interests`, `sources`, `discovery_suggestions`, `follows`, `content_items`, `user_content_status` — exact columns as below, consumed by every later task.
-
-- [ ] **Step 1: Write the migration**
-
-```sql
--- supabase/migrations/0001_init_schema.sql
-
-create table public.profiles (
-  user_id uuid primary key references auth.users(id) on delete cascade,
-  name text,
-  created_at timestamptz not null default now()
-);
-
-create table public.interests (
-  id uuid primary key default gen_random_uuid(),
-  label text not null unique,
-  is_preset boolean not null default false,
-  created_at timestamptz not null default now()
-);
-
-create table public.user_interests (
-  user_id uuid not null references auth.users(id) on delete cascade,
-  interest_id uuid not null references public.interests(id) on delete cascade,
-  created_at timestamptz not null default now(),
-  primary key (user_id, interest_id)
-);
-
-create table public.sources (
-  id uuid primary key default gen_random_uuid(),
-  type text not null check (type in ('blog','youtube','x','academic')),
-  name text not null,
-  url_or_handle text not null unique,
-  platform text,
-  status text not null default 'active' check (status in ('active','broken')),
-  discovered_via_interest_id uuid references public.interests(id) on delete set null,
-  fail_count integer not null default 0,
-  created_at timestamptz not null default now()
-);
-
-create table public.discovery_suggestions (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users(id) on delete cascade,
-  source_id uuid not null references public.sources(id) on delete cascade,
-  interest_id uuid references public.interests(id) on delete set null,
-  status text not null default 'pending' check (status in ('pending','liked','dismissed')),
-  created_at timestamptz not null default now(),
-  unique (user_id, source_id)
-);
-
-create table public.follows (
-  user_id uuid not null references auth.users(id) on delete cascade,
-  source_id uuid not null references public.sources(id) on delete cascade,
-  followed_at timestamptz not null default now(),
-  primary key (user_id, source_id)
-);
-
-create table public.content_items (
-  id uuid primary key default gen_random_uuid(),
-  source_id uuid not null references public.sources(id) on delete cascade,
-  title text not null,
-  url text not null unique,
-  published_at timestamptz not null,
-  content_type text not null,
-  summary text,
-  fetched_at timestamptz not null default now()
-);
-
-create table public.user_content_status (
-  user_id uuid not null references auth.users(id) on delete cascade,
-  content_item_id uuid not null references public.content_items(id) on delete cascade,
-  read_at timestamptz,
-  primary key (user_id, content_item_id)
-);
-
-alter table public.profiles enable row level security;
-alter table public.interests enable row level security;
-alter table public.user_interests enable row level security;
-alter table public.sources enable row level security;
-alter table public.discovery_suggestions enable row level security;
-alter table public.follows enable row level security;
-alter table public.content_items enable row level security;
-alter table public.user_content_status enable row level security;
-
-create policy "profiles_select_own" on public.profiles for select using (auth.uid() = user_id);
-create policy "profiles_update_own" on public.profiles for update using (auth.uid() = user_id);
-create policy "profiles_insert_own" on public.profiles for insert with check (auth.uid() = user_id);
-
-create policy "interests_select_all" on public.interests for select using (auth.role() = 'authenticated');
-create policy "interests_insert_authenticated" on public.interests for insert with check (auth.role() = 'authenticated');
-
-create policy "user_interests_select_own" on public.user_interests for select using (auth.uid() = user_id);
-create policy "user_interests_insert_own" on public.user_interests for insert with check (auth.uid() = user_id);
-create policy "user_interests_delete_own" on public.user_interests for delete using (auth.uid() = user_id);
-
-create policy "sources_select_all" on public.sources for select using (auth.role() = 'authenticated');
-
-create policy "discovery_suggestions_select_own" on public.discovery_suggestions for select using (auth.uid() = user_id);
-create policy "discovery_suggestions_update_own" on public.discovery_suggestions for update using (auth.uid() = user_id);
-
-create policy "follows_select_own" on public.follows for select using (auth.uid() = user_id);
-create policy "follows_insert_own" on public.follows for insert with check (auth.uid() = user_id);
-create policy "follows_delete_own" on public.follows for delete using (auth.uid() = user_id);
-
-create policy "content_items_select_all" on public.content_items for select using (auth.role() = 'authenticated');
-
-create policy "user_content_status_select_own" on public.user_content_status for select using (auth.uid() = user_id);
-create policy "user_content_status_insert_own" on public.user_content_status for insert with check (auth.uid() = user_id);
-create policy "user_content_status_update_own" on public.user_content_status for update using (auth.uid() = user_id);
-
-insert into public.interests (label, is_preset) values
-  ('Yapay Zeka', true),
-  ('Yazılım Mühendisliği', true),
-  ('Siber Güvenlik', true),
-  ('Finans', true),
-  ('Bilim', true)
-on conflict (label) do nothing;
-```
-
-- [ ] **Step 2: Apply the migration to local Supabase**
-
-Run: `supabase start` (first time only), then `supabase db reset`
-Expected: output ends with "Applying migration 0001_init_schema.sql... done" and no errors.
-
-- [ ] **Step 3: Write the RLS verification test**
-
-```typescript
-// tests/rls.test.ts
-import { describe, it, expect } from 'vitest';
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.SUPABASE_URL ?? 'http://127.0.0.1:54321';
-const ANON_KEY = process.env.SUPABASE_ANON_KEY!;
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const PASSWORD = 'test-password-123';
-
-async function createTestUser(email: string) {
-  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password: PASSWORD,
-    email_confirm: true,
-  });
-  if (error) throw error;
-  return data.user!;
-}
-
-async function signIn(email: string) {
-  const client = createClient(SUPABASE_URL, ANON_KEY);
-  const { error } = await client.auth.signInWithPassword({ email, password: PASSWORD });
-  if (error) throw error;
-  return client;
-}
-
-describe('follows RLS', () => {
-  it("blocks a user from reading another user's follows", async () => {
-    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-    const stamp = Date.now();
-    const emailA = `a-${stamp}@test.local`;
-    const emailB = `b-${stamp}@test.local`;
-
-    const userA = await createTestUser(emailA);
-    await createTestUser(emailB);
-
-    const { data: source } = await admin
-      .from('sources')
-      .insert({ type: 'blog', name: 'Test Blog', url_or_handle: `https://example.com/${stamp}` })
-      .select()
-      .single();
-
-    await admin.from('follows').insert({ user_id: userA.id, source_id: source!.id });
-
-    const clientB = await signIn(emailB);
-    const { data, error } = await clientB.from('follows').select('*').eq('user_id', userA.id);
-
-    expect(error).toBeNull();
-    expect(data).toHaveLength(0);
-  });
-});
-```
-
-- [ ] **Step 4: Run the test to verify it passes**
-
-Run: `npx vitest run tests/rls.test.ts`
-Expected: PASS (RLS blocks cross-user reads). If it fails with rows returned, a policy from Step 1 is missing or wrong — fix before continuing.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add supabase/migrations/0001_init_schema.sql tests/rls.test.ts
-git commit -m "feat: add ContentHub database schema with RLS policies"
-```
-
----
-
-## Task 2: Next.js app scaffold with Supabase auth
+## Task 1: Next.js app scaffold with Supabase auth
 
 **Files:**
 - Create: `lib/supabase/client.ts`
@@ -350,6 +149,211 @@ git commit -m "feat: scaffold Next.js app with Supabase auth"
 
 ---
 
+## Task 2: Database schema and RLS policies
+
+**Files:**
+- Create: `supabase/migrations/0001_init_schema.sql`
+- Test: `tests/rls.test.ts`
+
+**Interfaces:**
+- Produces: tables `profiles`, `interests`, `user_interests`, `sources`, `discovery_suggestions`, `follows`, `content_items`, `user_content_status` — exact columns as below, consumed by every later task.
+
+- [ ] **Step 1: Write the migration**
+
+```sql
+-- supabase/migrations/0001_init_schema.sql
+
+create table public.profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  name text,
+  created_at timestamptz not null default now()
+);
+
+create table public.interests (
+  id uuid primary key default gen_random_uuid(),
+  label text not null unique,
+  is_preset boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create table public.user_interests (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  interest_id uuid not null references public.interests(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, interest_id)
+);
+
+create table public.sources (
+  id uuid primary key default gen_random_uuid(),
+  type text not null check (type in ('blog','youtube','x','academic')),
+  name text not null,
+  url_or_handle text not null unique,
+  platform text,
+  status text not null default 'active' check (status in ('active','broken')),
+  discovered_via_interest_id uuid references public.interests(id) on delete set null,
+  fail_count integer not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create table public.discovery_suggestions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  source_id uuid not null references public.sources(id) on delete cascade,
+  interest_id uuid references public.interests(id) on delete set null,
+  status text not null default 'pending' check (status in ('pending','liked','dismissed')),
+  created_at timestamptz not null default now(),
+  unique (user_id, source_id)
+);
+
+create table public.follows (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  source_id uuid not null references public.sources(id) on delete cascade,
+  followed_at timestamptz not null default now(),
+  primary key (user_id, source_id)
+);
+
+create table public.content_items (
+  id uuid primary key default gen_random_uuid(),
+  source_id uuid not null references public.sources(id) on delete cascade,
+  title text not null,
+  url text not null unique,
+  published_at timestamptz not null,
+  content_type text not null,
+  summary text,
+  fetched_at timestamptz not null default now()
+);
+
+create table public.user_content_status (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  content_item_id uuid not null references public.content_items(id) on delete cascade,
+  read_at timestamptz,
+  primary key (user_id, content_item_id)
+);
+
+alter table public.profiles enable row level security;
+alter table public.interests enable row level security;
+alter table public.user_interests enable row level security;
+alter table public.sources enable row level security;
+alter table public.discovery_suggestions enable row level security;
+alter table public.follows enable row level security;
+alter table public.content_items enable row level security;
+alter table public.user_content_status enable row level security;
+
+create policy "profiles_select_own" on public.profiles for select using (auth.uid() = user_id);
+create policy "profiles_update_own" on public.profiles for update using (auth.uid() = user_id);
+create policy "profiles_insert_own" on public.profiles for insert with check (auth.uid() = user_id);
+
+create policy "interests_select_all" on public.interests for select using (auth.role() = 'authenticated');
+create policy "interests_insert_authenticated" on public.interests for insert with check (auth.role() = 'authenticated');
+
+create policy "user_interests_select_own" on public.user_interests for select using (auth.uid() = user_id);
+create policy "user_interests_insert_own" on public.user_interests for insert with check (auth.uid() = user_id);
+create policy "user_interests_delete_own" on public.user_interests for delete using (auth.uid() = user_id);
+
+create policy "sources_select_all" on public.sources for select using (auth.role() = 'authenticated');
+
+create policy "discovery_suggestions_select_own" on public.discovery_suggestions for select using (auth.uid() = user_id);
+create policy "discovery_suggestions_update_own" on public.discovery_suggestions for update using (auth.uid() = user_id);
+
+create policy "follows_select_own" on public.follows for select using (auth.uid() = user_id);
+create policy "follows_insert_own" on public.follows for insert with check (auth.uid() = user_id);
+create policy "follows_delete_own" on public.follows for delete using (auth.uid() = user_id);
+
+create policy "content_items_select_all" on public.content_items for select using (auth.role() = 'authenticated');
+
+create policy "user_content_status_select_own" on public.user_content_status for select using (auth.uid() = user_id);
+create policy "user_content_status_insert_own" on public.user_content_status for insert with check (auth.uid() = user_id);
+create policy "user_content_status_update_own" on public.user_content_status for update using (auth.uid() = user_id);
+
+insert into public.interests (label, is_preset) values
+  ('Yapay Zeka', true),
+  ('Yazılım Mühendisliği', true),
+  ('Siber Güvenlik', true),
+  ('Finans', true),
+  ('Bilim', true)
+on conflict (label) do nothing;
+```
+
+- [ ] **Step 2: Apply the migration to the hosted Supabase project**
+
+This project has no local Docker/Supabase CLI login (see Global Constraints) — the migration is applied by hand instead of `supabase db reset`.
+
+Ask the human partner to paste the full contents of `supabase/migrations/0001_init_schema.sql` into the Supabase Dashboard → SQL Editor (project ref `tigawsmrndalzvuyjycc`) and run it, then confirm back to you that it succeeded. Do not proceed to Step 3 until they confirm. Also confirm a `.env.local` file already exists at the repo root with `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` set (ask the human partner to create it from the Dashboard's Project Settings → API page if it doesn't exist yet) — never ask them to paste the values into chat, never print the file's contents yourself.
+
+- [ ] **Step 3: Write the RLS verification test**
+
+Add `dotenv` first: `npm install -D dotenv`
+
+```typescript
+// tests/rls.test.ts
+import 'dotenv/config';
+import { describe, it, expect } from 'vitest';
+import { createClient } from '@supabase/supabase-js';
+
+const SUPABASE_URL = process.env.SUPABASE_URL!;
+const ANON_KEY = process.env.SUPABASE_ANON_KEY!;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const PASSWORD = 'test-password-123';
+
+async function createTestUser(email: string) {
+  const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password: PASSWORD,
+    email_confirm: true,
+  });
+  if (error) throw error;
+  return data.user!;
+}
+
+async function signIn(email: string) {
+  const client = createClient(SUPABASE_URL, ANON_KEY);
+  const { error } = await client.auth.signInWithPassword({ email, password: PASSWORD });
+  if (error) throw error;
+  return client;
+}
+
+describe('follows RLS', () => {
+  it("blocks a user from reading another user's follows", async () => {
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    const stamp = Date.now();
+    const emailA = `a-${stamp}@test.local`;
+    const emailB = `b-${stamp}@test.local`;
+
+    const userA = await createTestUser(emailA);
+    await createTestUser(emailB);
+
+    const { data: source } = await admin
+      .from('sources')
+      .insert({ type: 'blog', name: 'Test Blog', url_or_handle: `https://example.com/${stamp}` })
+      .select()
+      .single();
+
+    await admin.from('follows').insert({ user_id: userA.id, source_id: source!.id });
+
+    const clientB = await signIn(emailB);
+    const { data, error } = await clientB.from('follows').select('*').eq('user_id', userA.id);
+
+    expect(error).toBeNull();
+    expect(data).toHaveLength(0);
+  });
+});
+```
+
+- [ ] **Step 4: Run the test to verify it passes**
+
+Run: `npx vitest run tests/rls.test.ts`
+Expected: PASS (RLS blocks cross-user reads). If it fails with rows returned, a policy from Step 1 is missing or wrong — fix before continuing.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add supabase/migrations/0001_init_schema.sql tests/rls.test.ts package.json package-lock.json
+git commit -m "feat: add ContentHub database schema with RLS policies"
+```
+
+---
+
 ## Task 3: Interest onboarding page
 
 **Files:**
@@ -358,7 +362,7 @@ git commit -m "feat: scaffold Next.js app with Supabase auth"
 - Test: `tests/interests.test.ts`
 
 **Interfaces:**
-- Consumes: `createClient()` from `lib/supabase/client.ts` (Task 2).
+- Consumes: `createClient()` from `lib/supabase/client.ts` (Task 1).
 - Produces: `normalizeInterestLabel(raw: string): string` from `lib/interests.ts`, used by the onboarding page and reusable by later interest-related UI.
 
 - [ ] **Step 1: Write the failing test**
@@ -952,7 +956,7 @@ git commit -m "feat: add n8n ingestion workflow export"
 - Test: `tests/discovery.test.ts`
 
 **Interfaces:**
-- Consumes: `createClient()` from `lib/supabase/client.ts` (Task 2); reads `discovery_suggestions` joined with `sources` (populated by Task 5).
+- Consumes: `createClient()` from `lib/supabase/client.ts` (Task 1); reads `discovery_suggestions` joined with `sources` (populated by Task 5).
 - Produces: `approveSuggestion(supabase, suggestion)` and `dismissSuggestion(supabase, suggestionId)` from `lib/discovery.ts`.
 
 - [ ] **Step 1: Write the failing test**
@@ -1120,7 +1124,7 @@ git commit -m "feat: add discover page with approve/dismiss"
 - Test: `tests/feed.test.ts`
 
 **Interfaces:**
-- Consumes: `createClient()` from `lib/supabase/client.ts` (Task 2); reads `content_items` joined via `follows` (populated by Task 6/9).
+- Consumes: `createClient()` from `lib/supabase/client.ts` (Task 1); reads `content_items` joined via `follows` (populated by Task 6/9).
 - Produces: `sortFeedByRecency(items)` and `markAsRead(supabase, userId, contentItemId)` from `lib/feed.ts`.
 
 - [ ] **Step 1: Write the failing test**
