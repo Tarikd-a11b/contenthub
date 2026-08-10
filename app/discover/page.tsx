@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client';
 import { approveSuggestion, dismissSuggestion } from '@/lib/discovery';
 import NavBar from '@/app/components/NavBar';
 import DiscoveryAgent from '@/app/components/DiscoveryAgent';
+import SourceTypeDot from '@/app/components/SourceTypeDot';
 
 type Suggestion = {
   id: string;
@@ -71,20 +72,38 @@ export default function DiscoverPage() {
   return (
     <div>
       <NavBar />
-      <div className="mx-auto mt-8 max-w-lg space-y-4">
+      <div className="mx-auto mt-8 max-w-lg space-y-4 px-4">
         <DiscoveryAgent followedHandles={followedHandles} />
-        <h1 className="text-2xl font-semibold">Keşfet</h1>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {suggestions.length === 0 && <p className="text-gray-500">Şu an öneri yok.</p>}
+        <h1 className="text-xl font-semibold">Keşfet</h1>
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        {suggestions.length === 0 && <p className="text-sm text-muted">Şu an öneri yok.</p>}
         {suggestions.map((s) => (
-          <div key={s.id} className="flex items-center justify-between rounded border p-4">
-            <div>
-              <p className="font-medium">{s.sources.name}</p>
-              <p className="text-sm text-gray-500">{s.sources.type} · {s.sources.url_or_handle}</p>
+          <div
+            key={s.id}
+            className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4"
+          >
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold">{s.sources.name}</p>
+              <p className="mt-1.5 flex items-center gap-2 font-mono text-xs tracking-wide text-muted">
+                <SourceTypeDot type={s.sources.type} />
+                <span className="truncate">
+                  {s.sources.type} · {s.sources.url_or_handle}
+                </span>
+              </p>
             </div>
-            <div className="flex gap-2">
-              <button onClick={() => handleApprove(s)} className="rounded bg-black px-3 py-1 text-white">Beğen</button>
-              <button onClick={() => handleDismiss(s)} className="rounded border px-3 py-1">Geç</button>
+            <div className="flex shrink-0 gap-2">
+              <button
+                onClick={() => handleApprove(s)}
+                className="rounded-lg bg-accent px-3 py-1.5 text-sm text-white transition-opacity hover:opacity-90"
+              >
+                Beğen
+              </button>
+              <button
+                onClick={() => handleDismiss(s)}
+                className="rounded-lg border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:border-accent"
+              >
+                Geç
+              </button>
             </div>
           </div>
         ))}
