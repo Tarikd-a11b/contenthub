@@ -1,5 +1,47 @@
 import { describe, it, expect, vi } from 'vitest';
-import { updateProfileName, unfollowSource } from '@/lib/profile';
+import { updateProfileName, unfollowSource, sourceProfileUrl } from '@/lib/profile';
+
+describe('sourceProfileUrl', () => {
+  it('builds a YouTube channel url from an @handle', () => {
+    expect(sourceProfileUrl('youtube', '@veritasium')).toBe('https://www.youtube.com/@veritasium');
+  });
+
+  it('builds an X profile url, with or without the leading @', () => {
+    expect(sourceProfileUrl('x', '@DAcemogluMIT')).toBe('https://x.com/DAcemogluMIT');
+    expect(sourceProfileUrl('x', 'kirkdokuzW')).toBe('https://x.com/kirkdokuzW');
+  });
+
+  it('adds the missing scheme to a bare blog domain', () => {
+    expect(sourceProfileUrl('blog', 'yanisvaroufakis.eu')).toBe('https://yanisvaroufakis.eu');
+  });
+
+  it('passes an already-complete url through untouched', () => {
+    const url = 'https://scholar.google.com.tr/citations?user=eWktLuQAAAAJ&hl=tr';
+    expect(sourceProfileUrl('academic', url)).toBe(url);
+    expect(sourceProfileUrl('youtube', 'https://www.youtube.com/@omnibus')).toBe('https://www.youtube.com/@omnibus');
+  });
+
+  it('uses the /channel/ path for a full channel id', () => {
+    expect(sourceProfileUrl('youtube', 'UC7_gcs09iThXybpVgjHZ_7g')).toBe(
+      'https://www.youtube.com/channel/UC7_gcs09iThXybpVgjHZ_7g'
+    );
+  });
+
+  it('percent-encodes non-ascii handles', () => {
+    expect(sourceProfileUrl('youtube', '@MoxoTürkiye')).toBe('https://www.youtube.com/@MoxoT%C3%BCrkiye');
+  });
+
+  it('returns null for a truncated channel id rather than linking to a 404', () => {
+    expect(sourceProfileUrl('youtube', 'UCmZUV...')).toBeNull();
+    expect(sourceProfileUrl('youtube', 'UCshort')).toBeNull();
+  });
+
+  it('returns null for empty input and unknown types', () => {
+    expect(sourceProfileUrl('youtube', '   ')).toBeNull();
+    expect(sourceProfileUrl('x', '@')).toBeNull();
+    expect(sourceProfileUrl('podcast', 'whatever')).toBeNull();
+  });
+});
 
 describe('updateProfileName', () => {
   it('upserts the profile row for the user', async () => {

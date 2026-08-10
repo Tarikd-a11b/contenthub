@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { updateProfileName, unfollowSource, type FollowedSource } from '@/lib/profile';
+import { updateProfileName, unfollowSource, sourceProfileUrl, type FollowedSource } from '@/lib/profile';
 import NavBar from '@/app/components/NavBar';
 import SourceTypeDot from '@/app/components/SourceTypeDot';
 
@@ -138,28 +138,49 @@ export default function ProfilePage() {
           {sources.length === 0 && (
             <p className="text-sm text-muted">Henüz kimseyi takip etmiyorsun.</p>
           )}
-          {sources.map((source) => (
-            <div
-              key={source.id}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4"
-            >
-              <div className="min-w-0">
-                <p className="text-[15px] font-semibold">{source.name}</p>
+          {sources.map((source) => {
+            const href = sourceProfileUrl(source.type, source.url_or_handle);
+            const details = (
+              <>
+                {/* group-hover yalnızca link sarmalayıcısında etkili; linksiz durumda 'group' yok. */}
+                <p className="text-[15px] font-semibold group-hover:underline">{source.name}</p>
                 <p className="mt-1.5 flex items-center gap-2 font-mono text-xs tracking-wide text-muted">
                   <SourceTypeDot type={source.type} />
                   <span className="truncate">
                     {source.type} · {source.url_or_handle}
                   </span>
                 </p>
-              </div>
-              <button
-                onClick={() => handleUnfollow(source.id)}
-                className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:border-accent"
+              </>
+            );
+
+            return (
+              <div
+                key={source.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-accent"
               >
-                Takibi bırak
-              </button>
-            </div>
-          ))}
+                {href ? (
+                  <a
+                    href={href}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={`${source.name} sayfasını aç`}
+                    className="group min-w-0 flex-1"
+                  >
+                    {details}
+                  </a>
+                ) : (
+                  // Adres kurulamayan kaynak (ör. kırpılmış channel id) linklenmez.
+                  <div className="min-w-0 flex-1">{details}</div>
+                )}
+                <button
+                  onClick={() => handleUnfollow(source.id)}
+                  className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:border-accent"
+                >
+                  Takibi bırak
+                </button>
+              </div>
+            );
+          })}
         </section>
 
         <button
