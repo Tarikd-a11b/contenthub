@@ -88,16 +88,18 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="mx-auto mt-16 max-w-lg">
-      <h1 className="mb-4 text-2xl font-semibold">İlgi alanlarını seç</h1>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="mb-6 flex flex-wrap gap-2">
+    <div className="mx-auto mt-16 max-w-lg px-4">
+      <h1 className="mb-2 text-2xl font-semibold">İlgi alanlarını seç</h1>
+      {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
+      <div className="mb-6 mt-6 flex flex-wrap gap-2">
         {interests.map((interest) => (
           <button
             key={interest.id}
             onClick={() => toggleInterest(interest.id)}
-            className={`rounded-full border px-3 py-1 text-sm ${
-              selected.has(interest.id) ? 'bg-black text-white' : 'bg-white text-black'
+            className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+              selected.has(interest.id)
+                ? 'border-accent bg-accent text-white'
+                : 'border-border text-muted hover:border-accent hover:text-foreground'
             }`}
           >
             {interest.label}
@@ -109,9 +111,12 @@ export default function OnboardingPage() {
           value={customLabel}
           onChange={(e) => setCustomLabel(e.target.value)}
           placeholder="Kendi ilgi alanını yaz"
-          className="flex-1 rounded border px-3 py-2"
+          className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
         />
-        <button onClick={addCustomInterest} className="rounded bg-black px-4 py-2 text-white">
+        <button
+          onClick={addCustomInterest}
+          className="rounded-lg bg-accent px-4 py-2 text-sm text-white transition-opacity hover:opacity-90"
+        >
           Ekle
         </button>
       </div>
