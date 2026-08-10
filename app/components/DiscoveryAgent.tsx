@@ -70,7 +70,7 @@ export default function DiscoveryAgent({ followedHandles }: { followedHandles: S
           <div key={i} className={m.role === 'user' ? 'text-right' : ''}>
             <p
               className={`inline-block rounded px-3 py-2 text-sm ${
-                m.role === 'user' ? 'bg-black text-white' : 'bg-gray-100'
+                m.role === 'user' ? 'bg-black text-white' : 'bg-gray-100 text-gray-900'
               }`}
             >
               {m.content}
