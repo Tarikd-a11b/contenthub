@@ -25,6 +25,10 @@ export function extractCandidates(assistantText: string): { text: string; candid
           typeof c === 'object' &&
           c !== null &&
           typeof (c as Record<string, unknown>).type === 'string' &&
+          ((c as Record<string, unknown>).type === 'blog' ||
+            (c as Record<string, unknown>).type === 'youtube' ||
+            (c as Record<string, unknown>).type === 'x' ||
+            (c as Record<string, unknown>).type === 'academic') &&
           typeof (c as Record<string, unknown>).name === 'string' &&
           typeof (c as Record<string, unknown>).url_or_handle === 'string'
       )
@@ -42,16 +46,24 @@ export function extractCandidates(assistantText: string): { text: string; candid
 }
 
 export async function followCandidate(supabase: SupabaseClient, userId: string, candidate: Candidate) {
-  const { data: source, error: sourceError } = await supabase
+  const { data: existing, error: lookupError } = await supabase
     .from('sources')
-    .upsert(
-      { type: candidate.type, name: candidate.name, url_or_handle: candidate.url_or_handle, platform: candidate.platform },
-      { onConflict: 'url_or_handle' }
-    )
-    .select()
-    .single();
-  if (sourceError) throw sourceError;
+    .select('id')
+    .eq('url_or_handle', candidate.url_or_handle)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
 
-  const { error: followError } = await supabase.from('follows').insert({ user_id: userId, source_id: source.id });
+  let sourceId = existing?.id;
+  if (!sourceId) {
+    const { data: created, error: insertError } = await supabase
+      .from('sources')
+      .insert({ type: candidate.type, name: candidate.name, url_or_handle: candidate.url_or_handle, platform: candidate.platform })
+      .select('id')
+      .single();
+    if (insertError) throw insertError;
+    sourceId = created.id;
+  }
+
+  const { error: followError } = await supabase.from('follows').insert({ user_id: userId, source_id: sourceId });
   if (followError && followError.code !== '23505') throw followError;
 }

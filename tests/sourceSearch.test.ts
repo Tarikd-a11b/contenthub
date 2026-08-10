@@ -48,34 +48,79 @@ describe('extractCandidates', () => {
 
     expect(result.candidates).toEqual([{ type: 'blog', name: 'Ok', url_or_handle: 'https://ok.com', platform: null }]);
   });
+
+  it('drops candidate entries with a type outside the allowed database values', () => {
+    const input =
+      'İşte.\n\n```json\n[{"type":"blog","name":"Ok","url_or_handle":"https://ok.com"},{"type":"podcast","name":"Bad","url_or_handle":"https://bad.com"}]\n```';
+
+    const result = extractCandidates(input);
+
+    expect(result.candidates).toEqual([{ type: 'blog', name: 'Ok', url_or_handle: 'https://ok.com', platform: null }]);
+  });
 });
 
-function fakeSupabaseForFollow(sourceId: string, followError: { code: string } | null = null) {
-  const single = vi.fn().mockResolvedValue({ data: { id: sourceId }, error: null });
-  const select = vi.fn().mockReturnValue({ single });
-  const upsert = vi.fn().mockReturnValue({ select });
-  const insert = vi.fn().mockResolvedValue({ error: followError });
-  const from = vi.fn((table: string) => (table === 'sources' ? { upsert } : { insert }));
-  return { from, upsert, insert };
+function fakeSupabaseForFollow(options: {
+  existingId?: string | null;
+  lookupError?: { code: string } | null;
+  insertedId?: string;
+  insertError?: { code: string } | null;
+  followError?: { code: string } | null;
+}) {
+  const { existingId = null, lookupError = null, insertedId = 'src-new', insertError = null, followError = null } = options;
+
+  const maybeSingle = vi.fn().mockResolvedValue({ data: existingId ? { id: existingId } : null, error: lookupError });
+  const eq = vi.fn().mockReturnValue({ maybeSingle });
+  const selectForLookup = vi.fn().mockReturnValue({ eq });
+
+  const single = vi.fn().mockResolvedValue({ data: insertError ? null : { id: insertedId }, error: insertError });
+  const selectForInsert = vi.fn().mockReturnValue({ single });
+  const insertSources = vi.fn().mockReturnValue({ select: selectForInsert });
+
+  const sourcesTable = {
+    select: selectForLookup,
+    insert: insertSources,
+  };
+
+  const insertFollows = vi.fn().mockResolvedValue({ error: followError });
+  const followsTable = { insert: insertFollows };
+
+  const from = vi.fn((table: string) => (table === 'sources' ? sourcesTable : followsTable));
+
+  return { from, selectForLookup, eq, maybeSingle, insertSources, selectForInsert, single, insertFollows };
 }
 
 describe('followCandidate', () => {
-  it('upserts the source on url_or_handle then inserts a follow row', async () => {
-    const supabase = fakeSupabaseForFollow('src-1');
+  it('reuses the existing source id and does not insert into sources when it already exists', async () => {
+    const supabase = fakeSupabaseForFollow({ existingId: 'src-existing' });
     const candidate = { type: 'blog', name: 'Test', url_or_handle: 'https://example.com', platform: null };
 
     // deno-lint-ignore no-explicit-any
     await followCandidate(supabase as any, 'user-1', candidate);
 
-    expect(supabase.upsert).toHaveBeenCalledWith(
-      { type: 'blog', name: 'Test', url_or_handle: 'https://example.com', platform: null },
-      { onConflict: 'url_or_handle' }
-    );
-    expect(supabase.insert).toHaveBeenCalledWith({ user_id: 'user-1', source_id: 'src-1' });
+    expect(supabase.selectForLookup).toHaveBeenCalledWith('id');
+    expect(supabase.eq).toHaveBeenCalledWith('url_or_handle', 'https://example.com');
+    expect(supabase.insertSources).not.toHaveBeenCalled();
+    expect(supabase.insertFollows).toHaveBeenCalledWith({ user_id: 'user-1', source_id: 'src-existing' });
+  });
+
+  it('inserts a new source when none exists yet, then follows the newly created id', async () => {
+    const supabase = fakeSupabaseForFollow({ existingId: null, insertedId: 'src-new' });
+    const candidate = { type: 'blog', name: 'Test', url_or_handle: 'https://example.com', platform: null };
+
+    // deno-lint-ignore no-explicit-any
+    await followCandidate(supabase as any, 'user-1', candidate);
+
+    expect(supabase.insertSources).toHaveBeenCalledWith({
+      type: 'blog',
+      name: 'Test',
+      url_or_handle: 'https://example.com',
+      platform: null,
+    });
+    expect(supabase.insertFollows).toHaveBeenCalledWith({ user_id: 'user-1', source_id: 'src-new' });
   });
 
   it('swallows a duplicate-follow error', async () => {
-    const supabase = fakeSupabaseForFollow('src-1', { code: '23505' });
+    const supabase = fakeSupabaseForFollow({ existingId: 'src-1', followError: { code: '23505' } });
     const candidate = { type: 'blog', name: 'Test', url_or_handle: 'https://example.com', platform: null };
 
     await expect(
@@ -85,7 +130,7 @@ describe('followCandidate', () => {
   });
 
   it('throws on other follow errors', async () => {
-    const supabase = fakeSupabaseForFollow('src-1', { code: '500' });
+    const supabase = fakeSupabaseForFollow({ existingId: 'src-1', followError: { code: '500' } });
     const candidate = { type: 'blog', name: 'Test', url_or_handle: 'https://example.com', platform: null };
 
     await expect(

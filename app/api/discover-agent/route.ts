@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { extractCandidates } from '@/lib/sourceSearch';
 
+export const maxDuration = 60;
+
 const SYSTEM_PROMPT = `Kullanıcının belirttiği kişi ya da konu için dünya çapında tanınmış, alanında uzman kaynaklar bul (kişisel blog, YouTube kanalı, X hesabı, akademik kaynak). Hacker News, Reddit gibi genel haber/link toplama sitelerini önerme — doğrudan o kişinin/uzmanın kendi yayın kanalını bul.
 
 Önce kullanıcıya normal, doğal bir cevap yaz (bulduklarını kısaca anlat). Cevabının en sonuna, bulduğun kaynakları şu formatta bir kod bloğunda ekle:
@@ -38,7 +40,7 @@ export async function POST(req: NextRequest) {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5',
-      max_tokens: 1024,
+      max_tokens: 4096,
       system: SYSTEM_PROMPT,
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
       messages,
@@ -50,6 +52,10 @@ export async function POST(req: NextRequest) {
   }
 
   const data = await response.json();
+  if (data.stop_reason === 'max_tokens') {
+    return NextResponse.json({ error: 'Cevap çok uzun sürdü, tekrar dener misin?' }, { status: 502 });
+  }
+
   const text = (data.content ?? [])
     .filter((block: { type: string }) => block.type === 'text')
     .map((block: { text: string }) => block.text)
