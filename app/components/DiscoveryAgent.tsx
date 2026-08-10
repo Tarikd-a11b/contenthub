@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { followCandidate, type Candidate } from '@/lib/sourceSearch';
+import SourceTypeDot from '@/app/components/SourceTypeDot';
 
 type ChatMessage = {
   role: 'user' | 'assistant';
@@ -62,45 +63,55 @@ export default function DiscoveryAgent({ followedHandles }: { followedHandles: S
   }
 
   return (
-    <div className="space-y-3 rounded border p-4">
-      <h2 className="text-lg font-medium">Kaynak Asistanı</h2>
+    <div className="space-y-4 rounded-lg border border-border bg-surface p-4">
+      <h2 className="text-base font-semibold">Kaynak Asistanı</h2>
 
-      <div className="space-y-3">
-        {messages.map((m, i) => (
-          <div key={i} className={m.role === 'user' ? 'text-right' : ''}>
-            <p
-              className={`inline-block rounded px-3 py-2 text-sm ${
-                m.role === 'user' ? 'bg-black text-white' : 'bg-gray-100 text-gray-900'
-              }`}
-            >
-              {m.content}
-            </p>
-            {m.candidates && m.candidates.length > 0 && (
-              <div className="mt-2 space-y-2">
-                {m.candidates.map((c) => (
-                  <div key={c.url_or_handle} className="flex items-center justify-between rounded border p-2 text-sm">
-                    <div>
-                      <p className="font-medium">{c.name}</p>
-                      <p className="text-gray-500">
-                        {c.type} · {c.url_or_handle}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleFollow(c)}
-                      disabled={isFollowed(c)}
-                      className="rounded border px-2 py-1 disabled:opacity-40"
+      {messages.length > 0 && (
+        <div className="space-y-4">
+          {messages.map((m, i) => (
+            <div key={i} className={m.role === 'user' ? 'text-right' : ''}>
+              <p
+                className={`inline-block max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-left text-sm ${
+                  m.role === 'user'
+                    ? 'bg-accent text-white'
+                    : 'border border-border bg-background text-foreground'
+                }`}
+              >
+                {m.content}
+              </p>
+              {m.candidates && m.candidates.length > 0 && (
+                <div className="mt-2 space-y-2 text-left">
+                  {m.candidates.map((c) => (
+                    <div
+                      key={c.url_or_handle}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background p-3"
                     >
-                      {isFollowed(c) ? 'Takip ediliyor ✓' : 'Takip et'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{c.name}</p>
+                        <p className="mt-1 flex items-center gap-2 font-mono text-xs tracking-wide text-muted">
+                          <SourceTypeDot type={c.type} />
+                          <span className="truncate">
+                            {c.type} · {c.url_or_handle}
+                          </span>
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleFollow(c)}
+                        disabled={isFollowed(c)}
+                        className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-xs text-foreground transition-colors hover:border-accent disabled:border-border disabled:text-muted disabled:hover:border-border"
+                      >
+                        {isFollowed(c) ? 'Takip ediliyor ✓' : 'Takip et'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <p className="text-sm text-red-400">{error}</p>}
 
       <div className="flex gap-2">
         <input
@@ -108,12 +119,12 @@ export default function DiscoveryAgent({ followedHandles }: { followedHandles: S
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder="Bir isim veya konu yaz: örn. Daron Acemoğlu"
-          className="flex-1 rounded border px-3 py-2 text-sm"
+          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
         />
         <button
           onClick={handleSend}
           disabled={loading}
-          className="rounded bg-black px-4 py-2 text-sm text-white disabled:opacity-40"
+          className="rounded-lg bg-accent px-4 py-2 text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-40"
         >
           {loading ? '...' : 'Gönder'}
         </button>
