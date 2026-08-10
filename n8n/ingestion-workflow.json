@@ -1,0 +1,232 @@
+{
+  "name": "ContentHub Ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */4 * * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://tigawsmrndalzvuyjycc.supabase.co/rest/v1/follows",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "source_id,sources(id,type,name,url_or_handle,status)"
+            },
+            {
+              "name": "sources.status",
+              "value": "eq.active"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "SUPABASE_SERVICE_ROLE_KEY_BURAYA"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer SUPABASE_SERVICE_ROLE_KEY_BURAYA"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-followed-sources",
+      "name": "Get followed sources",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        20,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.failedSourceIds = [];\nstaticData.succeededSourceIds = [];\nstaticData.normalizedItems = [];\n\nlet rows = [];\nconst inputs = $input.all();\nif (inputs.length === 1 && Array.isArray(inputs[0].json)) {\n  rows = inputs[0].json;\n} else {\n  rows = inputs.map(i => i.json);\n}\n\nconst seen = new Set();\nconst uniqueSources = [];\nfor (const row of rows) {\n  const s = row.sources;\n  if (!s || s.status !== 'active') continue;\n  if (seen.has(s.id)) continue;\n  seen.add(s.id);\n  uniqueSources.push({ json: { source_id: s.id, type: s.type, name: s.name, url_or_handle: s.url_or_handle } });\n}\nreturn uniqueSources;"
+      },
+      "id": "dedupe-sources",
+      "name": "Dedupe sources",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-sources",
+      "name": "Loop sources",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\n\nfunction decodeEntities(s) {\n  return s.replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'\"').replace(/&#39;/g,\"'\");\n}\nfunction extractTag(block, tag) {\n  const re = new RegExp('<' + tag + '\\\\b[^>]*>([\\\\s\\\\S]*?)<\\\\/' + tag + '>', 'i');\n  const m = block.match(re);\n  if (!m) return null;\n  let val = m[1].trim();\n  const cdata = val.match(/^<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>$/);\n  if (cdata) val = cdata[1].trim();\n  return decodeEntities(val);\n}\nfunction extractLink(block) {\n  let m = block.match(/<link\\b[^>]*\\bhref=[\"']([^\"']+)[\"'][^>]*\\/?>/i);\n  if (m) return m[1];\n  m = block.match(/<link\\b[^>]*>([\\s\\S]*?)<\\/link>/i);\n  if (m) return m[1].trim();\n  return null;\n}\nfunction parseFeed(xml) {\n  const entries = [];\n  const blockRegex = /<(item|entry)\\b[^>]*>([\\s\\S]*?)<\\/\\1>/gi;\n  let m;\n  while ((m = blockRegex.exec(xml)) !== null) {\n    const block = m[2];\n    const title = extractTag(block, 'title');\n    const link = extractLink(block);\n    const date = extractTag(block, 'pubDate') || extractTag(block, 'published') || extractTag(block, 'updated');\n    if (title && link) entries.push({ title, link, date });\n  }\n  return entries;\n}\nconst resolveYoutubeFeedUrl = async (urlOrHandle) => {\n  let handle = urlOrHandle.trim();\n  if (/^UC[\\w-]{22}$/.test(handle)) {\n    return 'https://www.youtube.com/feeds/videos.xml?channel_id=' + handle;\n  }\n  let m = handle.match(/\\/channel\\/(UC[\\w-]{22})/);\n  if (m) return 'https://www.youtube.com/feeds/videos.xml?channel_id=' + m[1];\n  let handlePart = handle;\n  let hm = handle.match(/youtube\\.com\\/(@[\\w.-]+)/i);\n  if (hm) handlePart = hm[1];\n  if (!handlePart.startsWith('@')) handlePart = '@' + handlePart;\n  const pageUrl = 'https://www.youtube.com/' + handlePart;\n  const raw = await this.helpers.httpRequest({ url: pageUrl });\n  const html = Buffer.isBuffer(raw) ? raw.toString('utf-8') : String(raw);\n  const cm = html.match(/\"channelId\":\"(UC[\\w-]{22})\"/) || html.match(/\\/channel\\/(UC[\\w-]{22})/);\n  if (!cm) throw new Error('Could not resolve channel id for handle ' + handlePart);\n  return 'https://www.youtube.com/feeds/videos.xml?channel_id=' + cm[1];\n};\n\nconst results = [];\nfor (const item of $input.all()) {\n  const src = item.json;\n  try {\n    let feedUrl;\n    if (src.type === 'youtube') {\n      feedUrl = await resolveYoutubeFeedUrl(src.url_or_handle);\n    } else {\n      feedUrl = src.url_or_handle;\n    }\n    const raw = await this.helpers.httpRequest({ url: feedUrl });\n    const xmlStr = Buffer.isBuffer(raw) ? raw.toString('utf-8') : String(raw);\n    const entries = parseFeed(xmlStr);\n    for (const e of entries) {\n      const d = e.date ? new Date(e.date) : null;\n      const publishedAt = (d && !isNaN(d.getTime())) ? d.toISOString() : new Date().toISOString();\n      staticData.normalizedItems.push({\n        source_id: src.source_id,\n        title: e.title,\n        url: e.link,\n        published_at: publishedAt,\n        content_type: src.type,\n        summary: null\n      });\n    }\n    staticData.succeededSourceIds.push(src.source_id);\n  } catch (err) {\n    staticData.failedSourceIds.push(src.source_id);\n  }\n  results.push(item);\n}\nreturn results;"
+      },
+      "id": "fetch-parse-source",
+      "name": "Fetch & parse source",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst payload = {\n  items: staticData.normalizedItems || [],\n  failed_source_ids: staticData.failedSourceIds || [],\n  succeeded_source_ids: staticData.succeededSourceIds || []\n};\nstaticData.normalizedItems = [];\nstaticData.failedSourceIds = [];\nstaticData.succeededSourceIds = [];\nreturn [{ json: payload }];"
+      },
+      "id": "build-payload",
+      "name": "Build payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://tigawsmrndalzvuyjycc.supabase.co/functions/v1/ingestion-webhook",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-webhook-secret",
+              "value": "N8N_WEBHOOK_SECRET_BURAYA"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "retry": {
+            "retryOnFail": true,
+            "maxTries": 3,
+            "waitBetweenTries": 5000
+          }
+        }
+      },
+      "id": "post-ingestion-webhook",
+      "name": "Post to ingestion-webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        920,
+        180
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get followed sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get followed sources": {
+      "main": [
+        [
+          {
+            "node": "Dedupe sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe sources": {
+      "main": [
+        [
+          {
+            "node": "Loop sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop sources": {
+      "main": [
+        [
+          {
+            "node": "Build payload",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fetch & parse source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch & parse source": {
+      "main": [
+        [
+          {
+            "node": "Loop sources",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build payload": {
+      "main": [
+        [
+          {
+            "node": "Post to ingestion-webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}
