@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { approveSuggestion, dismissSuggestion } from '@/lib/discovery';
+import NavBar from '@/app/components/NavBar';
 
 type Suggestion = {
   id: string;
@@ -53,22 +54,25 @@ export default function DiscoverPage() {
   }
 
   return (
-    <div className="mx-auto mt-16 max-w-lg space-y-4">
-      <h1 className="text-2xl font-semibold">Keşfet</h1>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {suggestions.length === 0 && <p className="text-gray-500">Şu an öneri yok.</p>}
-      {suggestions.map((s) => (
-        <div key={s.id} className="flex items-center justify-between rounded border p-4">
-          <div>
-            <p className="font-medium">{s.sources.name}</p>
-            <p className="text-sm text-gray-500">{s.sources.type} · {s.sources.url_or_handle}</p>
+    <div>
+      <NavBar />
+      <div className="mx-auto mt-8 max-w-lg space-y-4">
+        <h1 className="text-2xl font-semibold">Keşfet</h1>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        {suggestions.length === 0 && <p className="text-gray-500">Şu an öneri yok.</p>}
+        {suggestions.map((s) => (
+          <div key={s.id} className="flex items-center justify-between rounded border p-4">
+            <div>
+              <p className="font-medium">{s.sources.name}</p>
+              <p className="text-sm text-gray-500">{s.sources.type} · {s.sources.url_or_handle}</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => handleApprove(s)} className="rounded bg-black px-3 py-1 text-white">Beğen</button>
+              <button onClick={() => handleDismiss(s)} className="rounded border px-3 py-1">Geç</button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => handleApprove(s)} className="rounded bg-black px-3 py-1 text-white">Beğen</button>
-            <button onClick={() => handleDismiss(s)} className="rounded border px-3 py-1">Geç</button>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

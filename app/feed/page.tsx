@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { sortFeedByRecency, markAsRead, type FeedItem } from '@/lib/feed';
+import NavBar from '@/app/components/NavBar';
 
 export default function FeedPage() {
   const supabase = createClient();
@@ -71,23 +72,26 @@ export default function FeedPage() {
   }
 
   return (
-    <div className="mx-auto mt-16 max-w-2xl space-y-3">
-      <h1 className="text-2xl font-semibold">Akış</h1>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      {items.length === 0 && <p className="text-gray-500">Henüz içerik yok — bir kaynak takip et.</p>}
-      {items.map((item) => (
-        <a
-          key={item.id}
-          href={item.url}
-          target="_blank"
-          rel="noreferrer"
-          onClick={() => handleRead(item)}
-          className={`block rounded border p-4 ${item.is_read ? 'opacity-50' : ''}`}
-        >
-          <p className="font-medium">{item.title}</p>
-          <p className="text-sm text-gray-500">{item.source_name} · {item.content_type}</p>
-        </a>
-      ))}
+    <div>
+      <NavBar />
+      <div className="mx-auto mt-8 max-w-2xl space-y-3">
+        <h1 className="text-2xl font-semibold">Akış</h1>
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        {items.length === 0 && <p className="text-gray-500">Henüz içerik yok — bir kaynak takip et.</p>}
+        {items.map((item) => (
+          <a
+            key={item.id}
+            href={item.url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => handleRead(item)}
+            className={`block rounded border p-4 ${item.is_read ? 'opacity-50' : ''}`}
+          >
+            <p className="font-medium">{item.title}</p>
+            <p className="text-sm text-gray-500">{item.source_name} · {item.content_type}</p>
+          </a>
+        ))}
+      </div>
     </div>
   );
 }
