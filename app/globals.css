@@ -2,6 +2,9 @@
 @tailwind components;
 @tailwind utilities;
 
+/* font-sans must be applied here, not inherited from Tailwind Preflight's
+   html rule: --font-geist-sans is defined on <body> (layout.tsx), so the
+   var() only resolves in a declaration that lives on body or below. */
 body {
-  @apply bg-background text-foreground;
+  @apply bg-background font-sans text-foreground;
 }
