@@ -1,3 +1,5 @@
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 export type Candidate = {
   type: string;
   name: string;
@@ -37,4 +39,19 @@ export function extractCandidates(assistantText: string): { text: string; candid
   } catch {
     return { text: assistantText.trim(), candidates: [] };
   }
+}
+
+export async function followCandidate(supabase: SupabaseClient, userId: string, candidate: Candidate) {
+  const { data: source, error: sourceError } = await supabase
+    .from('sources')
+    .upsert(
+      { type: candidate.type, name: candidate.name, url_or_handle: candidate.url_or_handle, platform: candidate.platform },
+      { onConflict: 'url_or_handle' }
+    )
+    .select()
+    .single();
+  if (sourceError) throw sourceError;
+
+  const { error: followError } = await supabase.from('follows').insert({ user_id: userId, source_id: source.id });
+  if (followError && followError.code !== '23505') throw followError;
 }
