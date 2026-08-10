@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { updateProfileName, unfollowSource, type FollowedSource } from '@/lib/profile';
 import NavBar from '@/app/components/NavBar';
+import SourceTypeDot from '@/app/components/SourceTypeDot';
 
 export default function ProfilePage() {
   const supabase = createClient();
@@ -92,58 +93,79 @@ export default function ProfilePage() {
   return (
     <div>
       <NavBar />
-      <div className="mx-auto mt-8 max-w-lg space-y-8">
-        <h1 className="text-2xl font-semibold">Profil</h1>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="mx-auto mt-8 max-w-lg space-y-8 px-4">
+        <h1 className="text-xl font-semibold">Profil</h1>
+        {error && <p className="text-sm text-red-400">{error}</p>}
 
         <section className="space-y-2">
-          <p className="text-sm text-gray-500">{email}</p>
+          <p className="font-mono text-xs tracking-wide text-muted">{email}</p>
           <div className="flex gap-2">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Adın"
-              className="flex-1 rounded border px-3 py-2"
+              className="flex-1 rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted focus:border-accent focus:outline-none"
             />
             <button
               onClick={handleSaveName}
               disabled={saving || name === savedName}
-              className="rounded bg-black px-4 py-2 text-white disabled:opacity-40"
+              className="rounded-lg bg-accent px-4 py-2 text-sm text-white transition-opacity hover:opacity-90 disabled:opacity-40"
             >
               Kaydet
             </button>
           </div>
         </section>
 
-        <section className="space-y-2">
-          <h2 className="text-lg font-medium">İlgi alanların</h2>
-          {interests.length === 0 && <p className="text-gray-500">Henüz ilgi alanı seçmedin.</p>}
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold">İlgi alanların</h2>
+          {interests.length === 0 && (
+            <p className="text-sm text-muted">Henüz ilgi alanı seçmedin.</p>
+          )}
           <div className="flex flex-wrap gap-2">
             {interests.map((label) => (
-              <span key={label} className="rounded-full border px-3 py-1 text-sm">
+              <span
+                key={label}
+                className="rounded-full border border-border bg-surface px-3 py-1 text-xs text-foreground"
+              >
                 {label}
               </span>
             ))}
           </div>
         </section>
 
-        <section className="space-y-2">
-          <h2 className="text-lg font-medium">Takip ettiklerin</h2>
-          {sources.length === 0 && <p className="text-gray-500">Henüz kimseyi takip etmiyorsun.</p>}
+        <section className="space-y-3">
+          <h2 className="text-base font-semibold">Takip ettiklerin</h2>
+          {sources.length === 0 && (
+            <p className="text-sm text-muted">Henüz kimseyi takip etmiyorsun.</p>
+          )}
           {sources.map((source) => (
-            <div key={source.id} className="flex items-center justify-between rounded border p-3">
-              <div>
-                <p className="font-medium">{source.name}</p>
-                <p className="text-sm text-gray-500">{source.type} · {source.url_or_handle}</p>
+            <div
+              key={source.id}
+              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4"
+            >
+              <div className="min-w-0">
+                <p className="text-[15px] font-semibold">{source.name}</p>
+                <p className="mt-1.5 flex items-center gap-2 font-mono text-xs tracking-wide text-muted">
+                  <SourceTypeDot type={source.type} />
+                  <span className="truncate">
+                    {source.type} · {source.url_or_handle}
+                  </span>
+                </p>
               </div>
-              <button onClick={() => handleUnfollow(source.id)} className="rounded border px-3 py-1 text-sm">
+              <button
+                onClick={() => handleUnfollow(source.id)}
+                className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm text-foreground transition-colors hover:border-accent"
+              >
                 Takibi bırak
               </button>
             </div>
           ))}
         </section>
 
-        <button onClick={handleSignOut} className="rounded border px-4 py-2 text-sm">
+        <button
+          onClick={handleSignOut}
+          className="rounded-lg border border-border px-4 py-2 text-sm text-foreground transition-colors hover:border-accent"
+        >
           Çıkış yap
         </button>
       </div>
