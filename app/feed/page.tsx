@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { sortFeedByRecency, markAsRead, type FeedItem } from '@/lib/feed';
 import NavBar from '@/app/components/NavBar';
+import SourceTypeDot from '@/app/components/SourceTypeDot';
 
 export default function FeedPage() {
   const supabase = createClient();
@@ -74,10 +75,12 @@ export default function FeedPage() {
   return (
     <div>
       <NavBar />
-      <div className="mx-auto mt-8 max-w-2xl space-y-3">
-        <h1 className="text-2xl font-semibold">Akış</h1>
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        {items.length === 0 && <p className="text-gray-500">Henüz içerik yok — bir kaynak takip et.</p>}
+      <div className="mx-auto mt-8 max-w-2xl space-y-3 px-4">
+        <h1 className="text-xl font-semibold">Akış</h1>
+        {error && <p className="text-sm text-red-400">{error}</p>}
+        {items.length === 0 && (
+          <p className="text-sm text-muted">Henüz içerik yok — bir kaynak takip et.</p>
+        )}
         {items.map((item) => (
           <a
             key={item.id}
@@ -85,10 +88,15 @@ export default function FeedPage() {
             target="_blank"
             rel="noreferrer"
             onClick={() => handleRead(item)}
-            className={`block rounded border p-4 ${item.is_read ? 'opacity-50' : ''}`}
+            className={`block rounded-lg border border-border bg-surface p-4 transition-colors hover:border-accent ${
+              item.is_read ? 'opacity-50' : ''
+            }`}
           >
-            <p className="font-medium">{item.title}</p>
-            <p className="text-sm text-gray-500">{item.source_name} · {item.content_type}</p>
+            <p className="text-[15px] font-semibold">{item.title}</p>
+            <p className="mt-1.5 flex items-center gap-2 font-mono text-xs tracking-wide text-muted">
+              <SourceTypeDot type={item.content_type} />
+              {item.source_name} · {item.content_type}
+            </p>
           </a>
         ))}
       </div>
