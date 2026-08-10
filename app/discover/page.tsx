@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { approveSuggestion, dismissSuggestion } from '@/lib/discovery';
 import NavBar from '@/app/components/NavBar';
+import DiscoveryAgent from '@/app/components/DiscoveryAgent';
 
 type Suggestion = {
   id: string;
@@ -16,6 +17,7 @@ export default function DiscoverPage() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [followedHandles, setFollowedHandles] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUserId(data.user?.id ?? null));
@@ -31,6 +33,19 @@ export default function DiscoverPage() {
       .then(({ data, error }) => {
         if (error) setError(error.message);
         setSuggestions((data as unknown as Suggestion[]) ?? []);
+      });
+  }, [supabase, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from('follows')
+      .select('sources(url_or_handle)')
+      .eq('user_id', userId)
+      .then(({ data, error }) => {
+        if (error) setError(error.message);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setFollowedHandles(new Set((data ?? []).map((row: any) => row.sources?.url_or_handle).filter(Boolean)));
       });
   }, [supabase, userId]);
 
@@ -57,6 +72,7 @@ export default function DiscoverPage() {
     <div>
       <NavBar />
       <div className="mx-auto mt-8 max-w-lg space-y-4">
+        <DiscoveryAgent followedHandles={followedHandles} />
         <h1 className="text-2xl font-semibold">Keşfet</h1>
         {error && <p className="text-sm text-red-600">{error}</p>}
         {suggestions.length === 0 && <p className="text-gray-500">Şu an öneri yok.</p>}
