@@ -31,17 +31,48 @@ function buildPrompt(label: string): string {
 
 export type Candidate = { type: string; name: string; url_or_handle: string; platform?: string };
 
-/** Claude'un son metin bloğundan JSON adaylarını çıkarır; bozuksa boş liste. */
-export function parseCandidates(content: Array<{ type: string; text?: string }>): Candidate[] {
-  const textBlocks = (content ?? []).filter((b) => b.type === 'text');
-  const lastText = textBlocks.length > 0 ? (textBlocks[textBlocks.length - 1].text ?? '[]') : '[]';
-  const cleaned = lastText.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
-  try {
-    const parsed = JSON.parse(cleaned);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+/** Bir metin bloğundan JSON dizisi çıkarmayı birkaç biçimde dener. */
+function extractArray(text: string): Candidate[] | null {
+  const attempts: string[] = [];
+
+  // ```json ... ``` (veya etiketsiz) kod blokları — en olası biçim
+  for (const m of text.matchAll(/```(?:json)?\s*([\s\S]*?)```/g)) attempts.push(m[1]);
+  // Açıklama metninin arasına gömülmüş çıplak [ ... ]
+  const bare = text.match(/\[[\s\S]*\]/);
+  if (bare) attempts.push(bare[0]);
+  // Blok baştan sona sadece JSON
+  attempts.push(text);
+
+  for (const raw of attempts) {
+    try {
+      const parsed = JSON.parse(raw.trim());
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      // sıradaki biçimi dene
+    }
   }
+  return null;
+}
+
+/**
+ * Claude'un cevabından aday listesini çıkarır.
+ *
+ * Sadece SON metin bloğunu alıp "kod bloğu işaretlerini sil, JSON.parse et"
+ * demek kırılgan: gözlemlenen iki çalıştırmadan biri boş döndü. Model bazen
+ * JSON'dan önce bir cümle yazıyor, bazen JSON'u daha erken bir blokta
+ * bırakıyor, bazen kod bloğunu etiketsiz açıyor. Bloklara sondan başa bak ve
+ * her birinde birkaç biçimi dene.
+ */
+export function parseCandidates(content: Array<{ type: string; text?: string }>): Candidate[] {
+  const texts = (content ?? [])
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text ?? '');
+
+  for (let i = texts.length - 1; i >= 0; i--) {
+    const found = extractArray(texts[i]);
+    if (found) return found;
+  }
+  return [];
 }
 
 export async function runDiscovery(
@@ -77,7 +108,10 @@ export async function runDiscovery(
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 1024,
+        // 1024 ölçülen çıktıya (~400 token) yakın duruyordu; arama sonuçları
+        // uzayınca JSON ortasından kesilip ayrıştırılamaz hale gelebilir.
+        // Yalnızca üretilen token kadar ödeniyor, pay bırakmak bedava.
+        max_tokens: 2048,
         tools: [WEB_SEARCH_TOOL],
         messages: turns,
       }),
@@ -96,13 +130,32 @@ export async function runDiscovery(
 
   // 3) Adayları çıkar ve discovery-webhook'a yolla
   const candidates = parseCandidates(data?.content ?? []);
+
+  // Sıfır aday "başarı" değil. Sessiz geçerse Keşfet tünelinin neden ölü
+  // olduğunu anlamanın hiçbir yolu kalmıyor — nedenini görünür yap.
+  if (candidates.length === 0) {
+    const blocks = (data?.content ?? []).map((b: { type: string }) => b.type);
+    const lastText = (data?.content ?? [])
+      .filter((b: { type: string }) => b.type === 'text')
+      .map((b: { text?: string }) => b.text ?? '')
+      .pop() ?? '';
+    console.error(
+      `discovery: "${label}" için aday çıkmadı | stop_reason=${data?.stop_reason} | ` +
+        `bloklar=${JSON.stringify(blocks)} | metin(${lastText.length})=${JSON.stringify(lastText.slice(0, 300))}`
+    );
+  }
+
   const webhookRes = await fetcher(`${env.supabaseUrl}/functions/v1/discovery-webhook`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-webhook-secret': env.webhookSecret },
     body: JSON.stringify({ user_id, interest_id, candidates }),
   });
 
-  return { forwarded: webhookRes.ok, candidate_count: candidates.length };
+  return {
+    forwarded: webhookRes.ok,
+    candidate_count: candidates.length,
+    stop_reason: data?.stop_reason ?? null,
+  };
 }
 
 if (import.meta.main) {

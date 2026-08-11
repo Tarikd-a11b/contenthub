@@ -42,7 +42,7 @@ Deno.test('adayları çıkarır ve discovery-webhook e yollar', async () => {
     record: { user_id: 'user-1', interest_id: 'interest-1' },
   });
 
-  assertEquals(result, { forwarded: true, candidate_count: 1 });
+  assertEquals(result, { forwarded: true, candidate_count: 1, stop_reason: 'end_turn' });
 
   const webhookCall = calls.find((c) => c.url.includes('discovery-webhook'));
   assertEquals(webhookCall?.body, {
@@ -81,4 +81,43 @@ Deno.test('bozuk JSON gelirse boş aday listesi döner', () => {
 Deno.test('markdown kod bloğu içindeki JSON u ayrıştırır', () => {
   const fenced = '```json\n' + JSON.stringify(CANDIDATES) + '\n```';
   assertEquals(parseCandidates([{ type: 'text', text: fenced }]), CANDIDATES);
+});
+
+// Aşağıdakiler gerçek bir boş dönüşten sonra eklendi: model her seferinde
+// aynı biçimde cevap vermiyor ve tek biçime bel bağlamak kırılgandı.
+
+Deno.test('JSON dan önce açıklama cümlesi olsa da bulur', () => {
+  const text = 'İşte astrofizik alanında öne çıkan 5 kaynak:\n\n```json\n' +
+    JSON.stringify(CANDIDATES) + '\n```\n\nUmarım işine yarar.';
+  assertEquals(parseCandidates([{ type: 'text', text }]), CANDIDATES);
+});
+
+Deno.test('etiketsiz kod bloğunu da ayrıştırır', () => {
+  const text = '```\n' + JSON.stringify(CANDIDATES) + '\n```';
+  assertEquals(parseCandidates([{ type: 'text', text }]), CANDIDATES);
+});
+
+Deno.test('kod bloğu hiç yoksa çıplak diziyi bulur', () => {
+  const text = 'Buyur: ' + JSON.stringify(CANDIDATES) + ' — hepsi aktif.';
+  assertEquals(parseCandidates([{ type: 'text', text }]), CANDIDATES);
+});
+
+Deno.test('JSON son blokta değilse önceki bloklara bakar', () => {
+  assertEquals(
+    parseCandidates([
+      { type: 'text', text: '```json\n' + JSON.stringify(CANDIDATES) + '\n```' },
+      { type: 'text', text: 'Aramayı tamamladım.' },
+    ]),
+    CANDIDATES
+  );
+});
+
+Deno.test('hiçbir blokta JSON yoksa boş liste döner', () => {
+  assertEquals(
+    parseCandidates([
+      { type: 'text', text: 'Bu konuda kaynak bulamadım.' },
+      { type: 'text', text: 'Başka bir şey deneyelim mi?' },
+    ]),
+    []
+  );
 });
