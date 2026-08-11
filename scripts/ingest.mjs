@@ -81,9 +81,19 @@ async function fetchText(url) {
       'Accept-Language': 'en-US,en;q=0.9',
     },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status} — ${url}`);
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status} — ${url}`);
+    err.status = res.status;
+    throw err;
+  }
   return { text: await res.text(), contentType: res.headers.get('content-type') ?? '' };
 }
+
+// Bu kodlar "kaynak ölü" demek değil, "seni bot sanıp içeri almıyorum" demek.
+// academia.edu veri merkezi IP'lerini engelliyor: ev bağlantısından 200,
+// GitHub Actions'tan 403 dönüyor. Başarısız sayarsak kaynak 3 çalıştırmada
+// broken olup sessizce kayboluyor — oysa sapasağlam.
+const BLOCKED_STATUSES = new Set([401, 403, 429]);
 
 // --- feed keşfi (blog / academic) -------------------------------------------
 
@@ -119,8 +129,15 @@ async function discoverFeed(rawUrl) {
   const direct = await tryFeed(base);
   if (direct) return direct;
 
-  // Ana sayfaya hiç ulaşılamıyorsa kaynak gerçekten ölü demektir.
-  const { text: html } = await fetchText(base);
+  // Ana sayfaya hiç ulaşılamıyorsa kaynak gerçekten ölü demektir — ama
+  // engellenmek ulaşılamamak değil.
+  let html;
+  try {
+    html = (await fetchText(base)).text;
+  } catch (err) {
+    if (BLOCKED_STATUSES.has(err.status)) return null;
+    throw err;
+  }
 
   // 1) <link rel="alternate" type="application/rss+xml" href="...">
   for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
