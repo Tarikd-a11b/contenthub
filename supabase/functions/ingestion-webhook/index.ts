@@ -1,8 +1,6 @@
 /// <reference lib="deno.ns" />
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-const SHARED_SECRET = Deno.env.get('N8N_WEBHOOK_SECRET') ?? '';
-
 type IngestionPayload = {
   items: Array<{ source_id: string; title: string; url: string; published_at: string; content_type: string; summary?: string }>;
   failed_source_ids?: string[];
@@ -43,10 +41,6 @@ export async function handleIngestionPayload(
 
 if (import.meta.main) {
   Deno.serve(async (req) => {
-    if (req.headers.get('x-webhook-secret') !== SHARED_SECRET) {
-      return new Response('Unauthorized', { status: 401 });
-    }
-
     const payload: IngestionPayload = await req.json();
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const result = await handleIngestionPayload(supabase, payload);
