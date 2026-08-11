@@ -1,0 +1,33 @@
+name: Ingestion
+
+# 4 saatte bir takip edilen kaynakları tarar. Eskiden bu iş n8n'in schedule
+# trigger'ındaydı; n8n yalnızca kullanıcının bilgisayarında çalıştığı için
+# zamanlanmış çalıştırma pratikte hiç gerçekleşmiyordu.
+on:
+  schedule:
+    - cron: '0 */4 * * *'
+  workflow_dispatch: # Actions sekmesinden elle çalıştırmak için
+
+# Uzun süren bir tarama devam ederken yenisi başlarsa aynı içerikler iki kez
+# çekilmesin; upsert bunu zaten yutar ama boşuna istek atmanın anlamı yok.
+concurrency:
+  group: ingestion
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Kaynakları tara ve gönder
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          INGESTION_WEBHOOK_SECRET: ${{ secrets.INGESTION_WEBHOOK_SECRET }}
+        run: node scripts/ingest.mjs
