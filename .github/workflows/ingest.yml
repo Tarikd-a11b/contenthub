@@ -29,5 +29,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          INGESTION_WEBHOOK_SECRET: ${{ secrets.INGESTION_WEBHOOK_SECRET }}
         run: node scripts/ingest.mjs

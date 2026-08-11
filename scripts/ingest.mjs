@@ -14,11 +14,12 @@
  *   node scripts/ingest.mjs --dry-run  # webhook'a POST etmez, ne göndereceğini yazar
  */
 
+import 'dotenv/config';
+
 const DRY_RUN = process.argv.includes('--dry-run');
 
 const SUPABASE_URL = requireEnv('SUPABASE_URL');
 const SERVICE_ROLE_KEY = requireEnv('SUPABASE_SERVICE_ROLE_KEY');
-const WEBHOOK_SECRET = requireEnv('INGESTION_WEBHOOK_SECRET');
 
 function requireEnv(name) {
   const value = process.env[name];
@@ -226,7 +227,7 @@ async function postToWebhook(payload) {
     try {
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-webhook-secret': WEBHOOK_SECRET },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const text = await res.text();
