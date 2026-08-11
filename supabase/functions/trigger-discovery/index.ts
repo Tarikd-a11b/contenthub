@@ -159,6 +159,14 @@ export async function runDiscovery(
 if (import.meta.main) {
   Deno.serve(async (req: Request) => {
     const payload = await req.json();
+
+    if (Deno.env.get('DISCOVERY_ENABLED')?.toLowerCase() === 'false') {
+      return new Response(JSON.stringify({ skipped: 'discovery disabled', payload }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     try {
       const result = await runDiscovery(fetch, {
         supabaseUrl: Deno.env.get('SUPABASE_URL')!,
