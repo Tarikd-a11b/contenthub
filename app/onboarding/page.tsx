@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { normalizeInterestLabel } from '@/lib/interests';
+import NavBar from '@/app/components/NavBar';
 
 type Interest = { id: string; label: string; is_preset: boolean };
 
@@ -88,7 +90,9 @@ export default function OnboardingPage() {
   }
 
   return (
-    <div className="mx-auto mt-16 max-w-lg px-4">
+    <div>
+      <NavBar />
+      <div className="mx-auto mt-12 max-w-lg px-4">
       <h1 className="mb-2 text-2xl font-semibold">İlgi alanlarını seç</h1>
       {error && <p className="mb-4 text-sm text-red-400">{error}</p>}
       <div className="mb-6 mt-6 flex flex-wrap gap-2">
@@ -119,6 +123,16 @@ export default function OnboardingPage() {
         >
           Ekle
         </button>
+      </div>
+
+      {/* Giriş her seferinde buraya düşüyor (login/page.tsx). Çıkış yolu olmazsa
+          kullanıcı adresi elle yazmadan akışa geçemiyor. */}
+      <Link
+        href="/feed"
+        className="mt-10 inline-block rounded-lg border border-border px-4 py-2 text-sm text-foreground transition-colors hover:border-accent"
+      >
+        Akışa geç →
+      </Link>
       </div>
     </div>
   );
