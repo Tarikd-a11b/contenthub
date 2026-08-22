@@ -7,14 +7,16 @@
  * hiç gerçekleşmiyordu. Mantık buraya birebir taşındı; ingestion-webhook'a giden
  * payload sözleşmesi (items / failed_source_ids / succeeded_source_ids) aynı kaldı.
  *
- * Bağımlılık yok: Node 20+'ın global fetch'i yeterli.
+ * Bağımlılık yok: Node 20+'ın global fetch'i yeterli. GitHub Actions'ta
+ * `npm install` adımı olmadığı için `dotenv` gibi bir paket import ETME —
+ * CI'de node_modules yok, ERR_MODULE_NOT_FOUND ile daha ilk satırda patlar
+ * (2026-08-11 – 2026-08-22 arası ingestion'ın hiç çalışmamasının sebebi buydu).
+ * Yerelde .env.local okumak için `node --env-file=.env.local scripts/ingest.mjs` kullan.
  *
  * Kullanım:
  *   node scripts/ingest.mjs            # gerçek çalıştırma
  *   node scripts/ingest.mjs --dry-run  # webhook'a POST etmez, ne göndereceğini yazar
  */
-
-import 'dotenv/config';
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
