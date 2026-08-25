@@ -52,7 +52,9 @@ describe('updateProfileName', () => {
     await updateProfileName(supabase as any, 'user-1', 'Bilal');
 
     expect(supabase.from).toHaveBeenCalledWith('profiles');
-    expect(upsert).toHaveBeenCalledWith({ user_id: 'user-1', name: 'Bilal' }, { onConflict: 'user_id' });
+    // Anahtar sütun `id` (ortak tablo, bkz. lib/profile.ts). Bu beklenti eskiden
+    // user_id'ydi ve şema değişince testler geçmeye devam edip canlıyı kırdı.
+    expect(upsert).toHaveBeenCalledWith({ id: 'user-1', name: 'Bilal' }, { onConflict: 'id' });
   });
 });
 

@@ -40,10 +40,16 @@ export function sourceProfileUrl(type: string, urlOrHandle: string): string | nu
   }
 }
 
+// DİKKAT: `profiles` tablosu bu Supabase projesinde (tigawsmrndalzvuyjycc) BAŞKA bir
+// uygulamayla (FocusAid) ORTAK. 2026-08-24'te FocusAid tarafında çalıştırılan bir
+// hizalama betiği `profiles.user_id` sütununu `id` olarak yeniden adlandırdı ve bu
+// sayfayı kırdı ("column profiles.user_id does not exist"). Anahtar sütun artık `id`.
+// Diğer tablolar (follows, user_interests, user_content_status, source_suggestions)
+// hâlâ `user_id` kullanıyor — onları buna uydurmaya ÇALIŞMA.
 export async function updateProfileName(supabase: SupabaseClient, userId: string, name: string) {
   const { error } = await supabase
     .from('profiles')
-    .upsert({ user_id: userId, name }, { onConflict: 'user_id' });
+    .upsert({ id: userId, name }, { onConflict: 'id' });
   if (error) throw error;
 }
 

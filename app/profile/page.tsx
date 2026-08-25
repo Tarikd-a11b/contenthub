@@ -32,7 +32,9 @@ export default function ProfilePage() {
     supabase
       .from('profiles')
       .select('name')
-      .eq('user_id', userId)
+      // `id`, `user_id` değil: tablo FocusAid ile ortak, sütun orada yeniden
+      // adlandırıldı (bkz. lib/profile.ts'teki not).
+      .eq('id', userId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (error) setError(error.message);
