@@ -13,9 +13,32 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
+const SITE = "https://contenthub-self-nine.vercel.app";
+
 export const metadata: Metadata = {
-  title: "ContentHub",
-  description: "Multi-user content curation platform",
+  metadataBase: new URL(SITE),
+  // `default` + `template`: alt sayfalar kendi başlığını verirse "X · ContentHub"
+  // olur, vermezse tam başlık düşer. Sekmede ve paylaşımda ad hep görünür.
+  title: {
+    default: "ContentHub — takip ettiklerin, sırasıyla",
+    template: "%s · ContentHub",
+  },
+  description:
+    "İlgi alanlarını seç, takip etmeye değer kaynakları öğren, hepsini tek bir zaman sıralı akışta oku.",
+  openGraph: {
+    type: "website",
+    locale: "tr_TR",
+    url: SITE,
+    siteName: "ContentHub",
+    title: "ContentHub — takip ettiklerin, sırasıyla",
+    description:
+      "Kaynakları sen seçersin, sıralamayı zaman yapar. Öneri motoru yok, sonsuz kaydırma yok.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ContentHub — takip ettiklerin, sırasıyla",
+    description: "Kaynakları sen seçersin, sıralamayı zaman yapar.",
+  },
 };
 
 export default function RootLayout({
@@ -24,7 +47,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="tr">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >

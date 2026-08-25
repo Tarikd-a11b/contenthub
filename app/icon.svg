@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Simge, açılış sayfasının imzasını taşıyor: zaman omurgası. Dikey çizgi
+       akışın kendisi, üstündeki noktalar içerikler; renkler kaynak türlerinin
+       (pembe = YouTube, amber = blog) uygulama genelinde kullanılan renkleri. -->
+  <rect width="32" height="32" rx="7" fill="#08090C"/>
+  <line x1="11" y1="7" x2="11" y2="25" stroke="#2B2B37" stroke-width="2" stroke-linecap="round"/>
+  <circle cx="11" cy="10" r="3" fill="#E5708A"/>
+  <circle cx="11" cy="17.5" r="3" fill="#E5708A"/>
+  <circle cx="11" cy="25" r="3" fill="#D9A64E"/>
+  <rect x="17" y="8.5" width="9" height="2" rx="1" fill="#6C6CE5"/>
+  <rect x="17" y="16" width="9" height="2" rx="1" fill="#4A4A57"/>
+  <rect x="17" y="23.5" width="6" height="2" rx="1" fill="#4A4A57"/>
+</svg>

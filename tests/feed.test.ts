@@ -6,6 +6,12 @@ import {
   youtubeThumbnail,
   feedPage,
   feedPageCount,
+  decodeEntities,
+  cleanSummary,
+  filterFeed,
+  typeCounts,
+  FILTRE_YOK,
+  toggleSaved,
   type FeedItem,
 } from '@/lib/feed';
 
@@ -15,14 +21,14 @@ function localNoon(y: number, m: number, d: number): string {
 }
 
 function item(id: string, published_at: string, url = 'https://example.com/' + id): FeedItem {
-  return { id, title: 'T' + id, url, published_at, content_type: 'youtube', source_name: 'S', is_read: false };
+  return { id, title: 'T' + id, url, published_at, content_type: 'youtube', source_name: 'S', is_read: false, summary: null, is_saved: false };
 }
 
 describe('sortFeedByRecency', () => {
   it('orders items newest first', () => {
     const items: FeedItem[] = [
-      { id: '1', title: 'Old', url: 'https://a', published_at: '2026-01-01T00:00:00Z', content_type: 'blog', source_name: 'A', is_read: false },
-      { id: '2', title: 'New', url: 'https://b', published_at: '2026-08-01T00:00:00Z', content_type: 'blog', source_name: 'B', is_read: false },
+      { id: '1', title: 'Old', url: 'https://a', published_at: '2026-01-01T00:00:00Z', content_type: 'blog', source_name: 'A', is_read: false, summary: null, is_saved: false },
+      { id: '2', title: 'New', url: 'https://b', published_at: '2026-08-01T00:00:00Z', content_type: 'blog', source_name: 'B', is_read: false, summary: null, is_saved: false },
     ];
     expect(sortFeedByRecency(items).map((i) => i.id)).toEqual(['2', '1']);
   });
@@ -130,5 +136,197 @@ describe('markAsRead', () => {
       expect.objectContaining({ user_id: 'user-1', content_item_id: 'item-1' }),
       { onConflict: 'user_id,content_item_id' }
     );
+  });
+});
+
+describe('decodeEntities', () => {
+  // Bu iki dize CANLI veritabanindan alindi (2026-08-25) - akista harfi harfine
+  // boyle goruluyordu.
+  it('canlida gorulen sayisal varliklari cozer', () => {
+    expect(decodeEntities('Mr Burnham &#8211; Unherd op-ed')).toBe('Mr Burnham – Unherd op-ed');
+    expect(decodeEntities('24&#124;7 News')).toBe('24|7 News');
+  });
+
+  it('onaltilik ve adli varliklari cozer', () => {
+    expect(decodeEntities('a &#x2014; b')).toBe('a — b');
+    expect(decodeEntities('Tom &amp; Jerry')).toBe('Tom & Jerry');
+    expect(decodeEntities('&ldquo;alinti&rdquo;')).toBe('“alinti”');
+  });
+
+  it('varlik yoksa ayni dizeyi dondurur', () => {
+    const d = 'Moxo360 Testi Sertifikasyon Egitimi';
+    expect(decodeEntities(d)).toBe(d);
+    expect(decodeEntities('')).toBe('');
+  });
+
+  it('tanimadigi ya da bozuk varligi OLDUGU GIBI birakir', () => {
+    // Yarim cozulmus baslik, hic cozulmemis olandan daha kafa karistirici.
+    expect(decodeEntities('&bilinmeyen; x')).toBe('&bilinmeyen; x');
+    expect(decodeEntities('&#99999999; x')).toBe('&#99999999; x');
+    expect(decodeEntities('& yalniz')).toBe('& yalniz');
+  });
+
+  it('HTML etiketini METIN olarak birakir - enjeksiyon yolu acmaz', () => {
+    // Girdi dis kaynaktan geliyor; cozucu yalnizca varlik kacislarini acar,
+    // etiket uretmez. React bunu metin olarak basar.
+    expect(decodeEntities('&lt;script&gt;alert(1)&lt;/script&gt;'))
+      .toBe('<script>alert(1)</script>');
+  });
+});
+
+describe('cleanSummary', () => {
+  it('HTML etiketlerini soyup duz metin birakir', () => {
+    expect(cleanSummary('<p>Merhaba <a href="/x">dunya</a>.</p>')).toBe('Merhaba dunya .');
+  });
+
+  it('script ve style GOVDESINI de atar', () => {
+    // Yalnizca etiketi soymak govdedeki kodu METIN olarak ekranda birakirdi.
+    expect(cleanSummary('a <script>var x = 1;</script> b')).toBe('a b');
+    expect(cleanSummary('a <style>.k{color:red}</style> b')).toBe('a b');
+  });
+
+  it('varliklari cozer ve bosluklari tekler', () => {
+    expect(cleanSummary('Mr  Burnham &#8211;\n\n Unherd')).toBe('Mr Burnham – Unherd');
+  });
+
+  it('bos ya da yalnizca-etiket girdide null doner', () => {
+    expect(cleanSummary(null)).toBeNull();
+    expect(cleanSummary('')).toBeNull();
+    expect(cleanSummary('<div></div>')).toBeNull();
+  });
+
+  it('siniri asinca KELIME ortasindan kesmez', () => {
+    const uzun = 'kelime '.repeat(40).trim();
+    const c = cleanSummary(uzun, 30)!;
+    expect(c.endsWith('…')).toBe(true);
+    expect(c.length).toBeLessThanOrEqual(31);
+    // Kirpilan kisim tam kelimelerden olusmali
+    expect(c.slice(0, -1).trim().split(' ').every((k) => k === 'kelime')).toBe(true);
+  });
+
+  it('tek uzun kelimede sert keser - hic gostermemekten iyidir', () => {
+    const c = cleanSummary('a'.repeat(100), 20)!;
+    expect(c).toBe('a'.repeat(20) + '…');
+  });
+
+  it('sinirin altindaki metne ... eklemez', () => {
+    expect(cleanSummary('kisa metin', 180)).toBe('kisa metin');
+  });
+});
+
+describe('cleanSummary — gercek besleme verisi', () => {
+  // Asagidaki iki dize 2026-08-25'te GERCEK beslemelerden cekildi. Amac: iki
+  // kaynak turunun ozeti bambaska bicimde veriyor olmasi (biri HTML govdesi,
+  // digeri satir sonlu duz metin) ve ikisinin de ayni temiz ciktiya inmesi.
+  it('blog ozetindeki HTML govdesini duz metne indirir', () => {
+    const ham = '<p>In the lead-up to the Brexit referendum, Remainers deployed Project Fear.</p>';
+    expect(cleanSummary(ham)).toBe('In the lead-up to the Brexit referendum, Remainers deployed Project Fear.');
+  });
+
+  it('YouTube ozetindeki satir sonlarini teker', () => {
+    const ham = 'In math you can\'t truly pick things at random.\n\nSo if we can\'t pick randomly?';
+    expect(cleanSummary(ham)).toBe('In math you can\'t truly pick things at random. So if we can\'t pick randomly?');
+  });
+});
+
+describe('filterFeed', () => {
+  const okundu = { ...item('a', localNoon(2026, 7, 24)), is_read: true, content_type: 'youtube' };
+  const yeniYt = { ...item('b', localNoon(2026, 7, 24)), content_type: 'youtube' };
+  const yeniBlog = { ...item('c', localNoon(2026, 7, 24)), content_type: 'blog' };
+  const hepsi = [okundu, yeniYt, yeniBlog];
+
+  it('filtre yokken hepsini dondurur', () => {
+    expect(filterFeed(hepsi, FILTRE_YOK).map((i) => i.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('okunmamis filtresi okunmuslari atar', () => {
+    expect(filterFeed(hepsi, { ...FILTRE_YOK, unreadOnly: true, types: [] }).map((i) => i.id)).toEqual(['b', 'c']);
+  });
+
+  it('tur filtresi yalnizca o turu birakir', () => {
+    expect(filterFeed(hepsi, { ...FILTRE_YOK, unreadOnly: false, types: ['blog'] }).map((i) => i.id)).toEqual(['c']);
+  });
+
+  it('iki filtre birlikte calisir', () => {
+    expect(filterFeed(hepsi, { ...FILTRE_YOK, unreadOnly: true, types: ['youtube'] }).map((i) => i.id)).toEqual(['b']);
+  });
+
+  it('BOS tur listesi "hepsi" demektir, "hicbiri" degil', () => {
+    // Son rozeti de kapatinca akis bosalmamali, filtre kalkmali.
+    expect(filterFeed(hepsi, { ...FILTRE_YOK, unreadOnly: false, types: [] })).toHaveLength(3);
+  });
+
+  it('eslesme yoksa bos dizi doner, patlamaz', () => {
+    expect(filterFeed(hepsi, { ...FILTRE_YOK, unreadOnly: false, types: ['academic'] })).toEqual([]);
+    expect(filterFeed([], FILTRE_YOK)).toEqual([]);
+  });
+});
+
+describe('typeCounts', () => {
+  it('tur basina sayar', () => {
+    const items = [
+      { ...item('a', localNoon(2026, 7, 24)), content_type: 'youtube' },
+      { ...item('b', localNoon(2026, 7, 24)), content_type: 'youtube' },
+      { ...item('c', localNoon(2026, 7, 24)), content_type: 'blog' },
+    ];
+    expect(typeCounts(items)).toEqual({ youtube: 2, blog: 1 });
+  });
+
+  it('bos akista bos nesne doner', () => {
+    expect(typeCounts([])).toEqual({});
+  });
+});
+
+describe('filterFeed — kaydedilenler', () => {
+  const kayitli = { ...item('k', localNoon(2026, 7, 24)), is_saved: true };
+  const kayitsiz = { ...item('n', localNoon(2026, 7, 24)) };
+  const kayitliOkunmus = { ...item('o', localNoon(2026, 7, 24)), is_saved: true, is_read: true };
+  const hepsi = [kayitli, kayitsiz, kayitliOkunmus];
+
+  it('savedOnly yalnizca kaydedilenleri birakir', () => {
+    expect(filterFeed(hepsi, { ...FILTRE_YOK, savedOnly: true }).map((i) => i.id)).toEqual(['k', 'o']);
+  });
+
+  it('kaydedilenler + okunmamis birlikte daraltir', () => {
+    expect(
+      filterFeed(hepsi, { ...FILTRE_YOK, savedOnly: true, unreadOnly: true }).map((i) => i.id),
+    ).toEqual(['k']);
+  });
+
+  it('savedOnly kapaliyken kaydedilme durumu hicbir seyi elemez', () => {
+    expect(filterFeed(hepsi, FILTRE_YOK)).toHaveLength(3);
+  });
+});
+
+describe('toggleSaved', () => {
+  it('kaydederken saved_at yazar', async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const supabase = { from: vi.fn().mockReturnValue({ upsert }) };
+    // deno-lint-ignore no-explicit-any
+    await toggleSaved(supabase as any, 'user-1', 'item-1', true);
+    expect(supabase.from).toHaveBeenCalledWith('user_content_status');
+    const [satir, secenek] = upsert.mock.calls[0];
+    expect(satir.user_id).toBe('user-1');
+    expect(satir.content_item_id).toBe('item-1');
+    expect(typeof satir.saved_at).toBe('string');
+    expect(secenek).toEqual({ onConflict: 'user_id,content_item_id' });
+  });
+
+  it('kaydi kaldirirken saved_at NULL yazar - satiri silmez', () => {
+    // Satiri silmek read_at'i de gotururdu; kaydi kaldirmak okundu bilgisini
+    // silmemeli.
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const supabase = { from: vi.fn().mockReturnValue({ upsert }) };
+    // deno-lint-ignore no-explicit-any
+    return toggleSaved(supabase as any, 'user-1', 'item-1', false).then(() => {
+      expect(upsert.mock.calls[0][0].saved_at).toBeNull();
+    });
+  });
+
+  it('hata firlatir', async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: { message: 'nope' } });
+    const supabase = { from: vi.fn().mockReturnValue({ upsert }) };
+    // deno-lint-ignore no-explicit-any
+    await expect(toggleSaved(supabase as any, 'u', 'i', true)).rejects.toBeTruthy();
   });
 });

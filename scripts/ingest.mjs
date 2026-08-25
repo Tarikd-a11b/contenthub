@@ -35,12 +35,27 @@ function requireEnv(name) {
 // --- feed ayrıştırma (n8n "Fetch & parse source" node'undan birebir) ---------
 
 function decodeEntities(s) {
-  return s
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+  // SAYISAL varliklar da cozulmeli: bu fonksiyon eskiden yalnizca su bes
+  // adlandirilmis varligi taniyordu, o yuzden RSS'ten gelen '&#8211;' ve
+  // '&#124;' veritabanina oldugu gibi yazildi ve akista harfi harfine
+  // gorundu (2026-08-25'te canlida tespit edildi).
+  const ADLI = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+    hellip: '…', mdash: '—', ndash: '–',
+    rsquo: '’', lsquo: '‘', ldquo: '“', rdquo: '”',
+  };
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (tam, kod) => {
+    if (kod[0] === '#') {
+      const n = kod[1] === 'x' || kod[1] === 'X'
+        ? parseInt(kod.slice(2), 16)
+        : parseInt(kod.slice(1), 10);
+      // Bozuk kod noktasinda ORIJINALI koru; yarim cozulmus metin daha kotu.
+      if (!Number.isFinite(n) || n < 1 || n > 0x10ffff) return tam;
+      try { return String.fromCodePoint(n); } catch { return tam; }
+    }
+    const ad = kod.toLowerCase();
+    return Object.prototype.hasOwnProperty.call(ADLI, ad) ? ADLI[ad] : tam;
+  });
 }
 
 function extractTag(block, tag) {
@@ -51,6 +66,22 @@ function extractTag(block, tag) {
   const cdata = val.match(/^<!\[CDATA\[([\s\S]*?)\]\]>$/);
   if (cdata) val = cdata[1].trim();
   return decodeEntities(val);
+}
+
+/**
+ * Icerik ozeti. Besleme turune gore alan adi degisiyor: RSS <description>,
+ * Atom <summary>, YouTube <media:description>. Ilk dolu olan alinir.
+ *
+ * HAM saklaniyor (etiketler dahil), yalnizca uzunlugu kirpiliyor: temizleme
+ * ve kisaltma gorunum katmaninda, test edilen cleanSummary() ile yapiliyor.
+ * Boylece kural tek yerde durur ve ayni veriden farkli uzunluklar uretilebilir.
+ */
+function extractDescription(block) {
+  for (const tag of ['description', 'summary', 'media:description', 'content:encoded']) {
+    const val = extractTag(block, tag);
+    if (val) return val.slice(0, 1200);   // etiketler soyulunca cok daha kisalir
+  }
+  return null;
 }
 
 function extractLink(block) {
@@ -71,7 +102,7 @@ function parseFeed(xml) {
     const link = extractLink(block);
     const date =
       extractTag(block, 'pubDate') || extractTag(block, 'published') || extractTag(block, 'updated');
-    if (title && link) entries.push({ title, link, date });
+    if (title && link) entries.push({ title, link, date, description: extractDescription(block) });
   }
   return entries;
 }
@@ -290,7 +321,7 @@ async function main() {
           url: e.link,
           published_at: d && !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString(),
           content_type: src.type,
-          summary: null,
+          summary: e.description,
         });
       }
       succeeded.push(src.source_id);
