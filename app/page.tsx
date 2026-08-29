@@ -126,6 +126,21 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── kaynak evreni (tam genişlik takımyıldız, kendi bölümü) ─ */}
+      <section className="relative h-[60vh] overflow-hidden border-t border-border sm:h-[75vh]">
+        <Constellation />
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] mx-auto max-w-5xl px-6">
+          <div data-lp-mark className={`lp-dateline relative pt-[2.6rem] ${gutter}`}>
+            <span aria-hidden className="absolute left-[calc(var(--lp-gutter)-2.1rem)] top-[3.35rem] h-px w-[1.35rem] bg-border" />
+            <h2 className="lp-reveal font-mono text-[0.7rem] tracking-[0.19em] text-[#585863]">KAYNAK EVRENİ</h2>
+            <p className="lp-reveal mt-2.5 max-w-[26rem] font-read text-[0.9rem] font-light leading-[1.6] text-muted">
+              Bunlar senin takip ettiklerin değil — herkesin seçebileceği geniş bir ağ.
+              Akışını bu evrenden sen kurarsın.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* ── tel (feed) + zaman omurgası ────────────────────────── */}
       <div className="relative mx-auto max-w-5xl px-6">
         {/* zaman teli */}

@@ -16,16 +16,26 @@ const COLORS: Record<Tur, [number, number, number]> = {
   academic: [76, 187, 138],
 };
 
-// Akışta görünenlerle aynı gerçek kaynaklar.
+/* Genel bir kaynak evreni — kullanıcının gerçekten takip ettikleriyle
+   sınırlı değil. Herkesin takip edebileceği, farklı ilgi alanlarından
+   tanınır isimler; haritanın amacı "bu kadar geniş bir ağdan seçebilirsin"
+   fikrini vermek. */
 const SOURCES: [string, Tur][] = [
   ['Veritasium', 'youtube'], ['OMNIBUS', 'youtube'], ['Mahalle Yanarken', 'youtube'],
   ['Moxo Türkiye', 'youtube'], ['Kurzgesagt', 'youtube'], ['3Blue1Brown', 'youtube'],
   ['Fireship', 'youtube'], ['Lex Fridman', 'youtube'], ['ODTÜ', 'youtube'],
+  ['Real Engineering', 'youtube'], ['Two Minute Papers', 'youtube'], ['Not Just Bikes', 'youtube'],
+  ['ColdFusion', 'youtube'], ['Numberphile', 'youtube'], ['PBS Space Time', 'youtube'],
+  ['Steve Mould', 'youtube'], ['Practical Engineering', 'youtube'], ['Computerphile', 'youtube'],
+  ['Vsauce', 'youtube'], ['CGP Grey', 'youtube'], ['Tom Scott', 'youtube'], ['Wendover Productions', 'youtube'],
   ['Yanis Varoufakis', 'blog'], ['Stratechery', 'blog'], ['Marginal Revolution', 'blog'],
   ['Astral Codex Ten', 'blog'], ['Construction Physics', 'blog'], ['The Diff', 'blog'],
-  ['Ben Thompson', 'blog'], ['Noahpinion', 'blog'],
+  ['Ben Thompson', 'blog'], ['Noahpinion', 'blog'], ['Slow Boring', 'blog'], ['Money Stuff', 'blog'],
+  ['LessWrong', 'blog'], ['Farnam Street', 'blog'], ['Wait But Why', 'blog'], ['Zvi Mowshowitz', 'blog'],
   ['@balajis', 'x'], ['@pmarca', 'x'], ['@karpathy', 'x'], ['@tylercowen', 'x'],
+  ['@sama', 'x'], ['@AndrewYNg', 'x'], ['@simonw', 'x'], ['@swyx', 'x'], ['@emollick', 'x'],
   ['arXiv: cs.AI', 'academic'], ['Nature', 'academic'], ['SSRN', 'academic'], ['NBER', 'academic'],
+  ['Science', 'academic'], ['PNAS', 'academic'], ['The Lancet', 'academic'], ['ACM Digital Library', 'academic'],
 ];
 
 const LINK_DIST = 128;
@@ -69,9 +79,9 @@ export default function Constellation() {
 
     function build() {
       const area = W * H;
-      let target = Math.round(area / 15000);
-      target = Math.max(22, Math.min(target, 90));
-      if (W < 640) target = Math.min(target, 30);
+      let target = Math.round(area / 11000);
+      target = Math.max(30, Math.min(target, 150));
+      if (W < 640) target = Math.min(target, 42);
       nodes = [];
       for (let i = 0; i < target; i++) {
         const [name, type] = SOURCES[i % SOURCES.length];
