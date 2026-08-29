@@ -71,25 +71,34 @@ export default function LandingMotion() {
       cleanups.push(() => clearTimeout(safety));
     }
 
-    /* ── yaklaşma (kaynak evreni girişi) ── */
-    const approaches = Array.from(document.querySelectorAll<HTMLElement>('.lp-approach'));
-    if (approaches.length) {
-      if (reduce) {
-        approaches.forEach((el) => el.classList.add('on'));
-      } else {
-        const approachObs = new IntersectionObserver(
-          (entries) => {
-            entries.forEach((e) => {
-              if (!e.isIntersecting) return;
-              (e.target as HTMLElement).classList.add('on');
-              approachObs.unobserve(e.target);
-            });
-          },
-          { threshold: 0, rootMargin: '0px 0px -15% 0px' }
-        );
-        approaches.forEach((el) => approachObs.observe(el));
-        cleanups.push(() => approachObs.disconnect());
-      }
+    /* ── yaklaşma (kaynak evreni zoom'u, kaydırmayla eşlenmiş) ──
+       Sabit süreli tek seferlik bir animasyon DEĞİL: ölçek/opaklık/blur
+       her karede kaydırma miktarına göre yeniden hesaplanıyor, bu yüzden
+       yukarı kaydırınca da tersine dönüyor — kamera fiziksel olarak
+       kaydırmaya bağlı gibi hissettiriyor. */
+    const approachEl = document.querySelector<HTMLElement>('.lp-approach');
+    if (approachEl && !reduce) {
+      const host = approachEl.parentElement as HTMLElement; // sabit [data-lp-host]
+      let ticking = false;
+      const onApproachScroll = () => {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(() => {
+          const rect = host.getBoundingClientRect();
+          const vh = window.innerHeight;
+          const start = vh * 0.92; // ekranın altına yeni girerken
+          const end = vh * 0.3;    // üst üçte bire ulaşınca "varmış" say
+          let p = (start - rect.top) / (start - end);
+          p = Math.max(0, Math.min(1, p));
+          approachEl.style.transform = `scale(${(0.8 + p * 0.2).toFixed(4)})`;
+          approachEl.style.opacity = p.toFixed(3);
+          approachEl.style.filter = `blur(${((1 - p) * 16).toFixed(2)}px)`;
+          ticking = false;
+        });
+      };
+      window.addEventListener('scroll', onApproachScroll, { passive: true });
+      onApproachScroll();
+      cleanups.push(() => window.removeEventListener('scroll', onApproachScroll));
     }
 
     /* ── zaman teli dolgusu ── */

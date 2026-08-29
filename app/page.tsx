@@ -126,11 +126,14 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── kaynak evreni (tam genişlik takımyıldız, kendi bölümü) ─
+      {/* ── kaynak evreni (tam ekran ara sahne) ─────────────────────
+           min-h-dvh: kaydırırken SADECE bu bölüm ekranda olsun diye
+           hero'nun kuyruğu / feed'in başlığı aynı anda görünmesin.
            data-lp-host: Constellation'ın boyut ölçtüğü sabit kapsayıcı.
-           .lp-approach sarmalayıcısı görsel olarak ölçekleniyor ama bu
-           ölçüm noktasını etkilemiyor (bkz. Constellation.tsx). */}
-      <section data-lp-host className="relative h-[60vh] overflow-hidden border-t border-border sm:h-[75vh]">
+           .lp-approach sarmalayıcısı kaydırma miktarına göre JS'te
+           ölçekleniyor (LandingMotion.tsx) ama bu ölçüm noktasını
+           etkilemiyor (bkz. Constellation.tsx). */}
+      <section data-lp-host className="relative min-h-dvh overflow-hidden border-t border-border">
         <div className="lp-approach absolute inset-0">
           <Constellation />
         </div>
