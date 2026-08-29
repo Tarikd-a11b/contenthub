@@ -61,3 +61,59 @@ export async function unfollowSource(supabase: SupabaseClient, userId: string, s
     .eq('source_id', sourceId);
   if (error) throw error;
 }
+
+export type SourceCategory = 'youtube' | 'blog' | 'x' | 'academic' | 'mixed';
+
+export const CATEGORY_LABELS: Record<SourceCategory, string> = {
+  youtube: 'YouTube',
+  blog: 'Blog',
+  x: 'X',
+  academic: 'Akademik',
+  mixed: 'Birden fazla platform',
+};
+
+const CATEGORY_ORDER: SourceCategory[] = ['youtube', 'blog', 'x', 'academic', 'mixed'];
+
+export type FollowedPerson = {
+  key: string;
+  name: string;
+  category: SourceCategory;
+  platforms: FollowedSource[];
+};
+
+/**
+ * Aynı isimdeki kaynakları (ör. bir kişinin hem YouTube hem blog kaydı) tek
+ * karta indirger. İsim eşleşmesi kaba bir sezgi ama bu tabloda kişi/kaynak
+ * ayrımını tutan başka bir alan yok (bkz. proje notları — şema değişikliği
+ * gerektirmeden çözüm).
+ */
+export function groupFollowedSources(sources: FollowedSource[]): FollowedPerson[] {
+  const byName = new Map<string, FollowedSource[]>();
+  for (const source of sources) {
+    const key = source.name.trim().toLowerCase();
+    const group = byName.get(key);
+    if (group) {
+      group.push(source);
+    } else {
+      byName.set(key, [source]);
+    }
+  }
+
+  const people = Array.from(byName.values()).map((platforms): FollowedPerson => {
+    const types = new Set(platforms.map((p) => p.type));
+    const category = (types.size === 1 ? platforms[0].type : 'mixed') as SourceCategory;
+    return { key: platforms[0].name.trim().toLowerCase(), name: platforms[0].name, category, platforms };
+  });
+
+  return people.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+}
+
+export type FollowedCategoryGroup = { category: SourceCategory; label: string; people: FollowedPerson[] };
+
+export function groupPeopleByCategory(people: FollowedPerson[]): FollowedCategoryGroup[] {
+  return CATEGORY_ORDER.map((category) => ({
+    category,
+    label: CATEGORY_LABELS[category],
+    people: people.filter((p) => p.category === category),
+  })).filter((group) => group.people.length > 0);
+}
