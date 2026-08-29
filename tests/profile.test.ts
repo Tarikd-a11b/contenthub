@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { updateProfileName, unfollowSource, sourceProfileUrl } from '@/lib/profile';
+import {
+  updateProfileName,
+  unfollowSource,
+  sourceProfileUrl,
+  groupFollowedSources,
+  groupPeopleByCategory,
+  type FollowedSource,
+} from '@/lib/profile';
 
 describe('sourceProfileUrl', () => {
   it('builds a YouTube channel url from an @handle', () => {
@@ -56,6 +63,66 @@ describe('updateProfileName', () => {
     // user_id'ydi ve şema değişince testler geçmeye devam edip canlıyı kırdı.
     expect(upsert).toHaveBeenCalledWith({ id: 'user-1', name: 'Bilal' }, { onConflict: 'id' });
   });
+});
+
+describe('groupFollowedSources', () => {
+  const src = (over: Partial<FollowedSource>): FollowedSource => ({
+    id: 'id',
+    name: 'name',
+    type: 'blog',
+    url_or_handle: 'x',
+    ...over,
+  });
+
+  it('merges same-name sources across platforms into one card, category "mixed"', () => {
+    const sources = [
+      src({ id: '1', name: 'Barış Özcan', type: 'youtube', url_or_handle: '@barisozcan' }),
+      src({ id: '2', name: 'Barış Özcan', type: 'blog', url_or_handle: 'barisozcan.com' }),
+    ];
+
+    const people = groupFollowedSources(sources);
+
+    expect(people).toHaveLength(1);
+    expect(people[0].name).toBe('Barış Özcan');
+    expect(people[0].category).toBe('mixed');
+    expect(people[0].platforms).toHaveLength(2);
+  });
+
+  it('is case-insensitive when matching names', () => {
+    const sources = [src({ id: '1', name: 'omnibus' }), src({ id: '2', name: 'Omnibus' })];
+    expect(groupFollowedSources(sources)).toHaveLength(1);
+  });
+
+  it('keeps a single-platform source in its own type as the category', () => {
+    const sources = [src({ id: '1', name: 'Veritasium', type: 'youtube' })];
+    expect(groupFollowedSources(sources)[0].category).toBe('youtube');
+  });
+
+  it('sorts people alphabetically by name', () => {
+    const sources = [src({ id: '1', name: 'Zeynep' }), src({ id: '2', name: 'Ahmet' })];
+    expect(groupFollowedSources(sources).map((p) => p.name)).toEqual(['Ahmet', 'Zeynep']);
+  });
+});
+
+describe('groupPeopleByCategory', () => {
+  it('buckets people under their category in a fixed order and drops empty categories', () => {
+    const sources = [
+      src({ id: '1', name: 'A', type: 'blog' }),
+      src({ id: '2', name: 'B', type: 'youtube' }),
+      src({ id: '3', name: 'C', type: 'youtube' }),
+    ];
+    const people = groupFollowedSources(sources);
+
+    const groups = groupPeopleByCategory(people);
+
+    expect(groups.map((g) => g.category)).toEqual(['youtube', 'blog']);
+    expect(groups[0].people.map((p) => p.name)).toEqual(['B', 'C']);
+    expect(groups[0].label).toBe('YouTube');
+  });
+
+  function src(over: Partial<FollowedSource>): FollowedSource {
+    return { id: 'id', name: 'name', type: 'blog', url_or_handle: 'x', ...over };
+  }
 });
 
 describe('unfollowSource', () => {

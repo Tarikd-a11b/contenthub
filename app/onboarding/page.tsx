@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { normalizeInterestLabel } from '@/lib/interests';
+import { toggleUserInterest, findOrCreateInterest } from '@/lib/interests';
 import NavBar from '@/app/components/NavBar';
 
 type Interest = { id: string; label: string; is_preset: boolean };
@@ -48,11 +48,7 @@ export default function OnboardingPage() {
 
     try {
       const isSelected = selected.has(interestId);
-      if (isSelected) {
-        await supabase.from('user_interests').delete().eq('user_id', userId).eq('interest_id', interestId);
-      } else {
-        await supabase.from('user_interests').insert({ user_id: userId, interest_id: interestId });
-      }
+      await toggleUserInterest(supabase, userId, interestId, isSelected);
       setSelected((prev) => {
         const next = new Set(prev);
         if (isSelected) {
@@ -71,17 +67,10 @@ export default function OnboardingPage() {
     if (!userId) return;
 
     try {
-      const label = normalizeInterestLabel(customLabel);
-      if (!label) return;
-
-      const { data: existing } = await supabase.from('interests').select('id').ilike('label', label).maybeSingle();
-      const interestId = existing?.id ?? (
-        await supabase.from('interests').insert({ label, is_preset: false }).select('id').single()
-      ).data?.id;
-
-      if (interestId) {
-        setInterests((prev) => (prev.some((i) => i.id === interestId) ? prev : [...prev, { id: interestId, label, is_preset: false }]));
-        await toggleInterest(interestId);
+      const found = await findOrCreateInterest(supabase, customLabel);
+      if (found) {
+        setInterests((prev) => (prev.some((i) => i.id === found.id) ? prev : [...prev, { id: found.id, label: found.label, is_preset: false }]));
+        await toggleInterest(found.id);
       }
       setCustomLabel('');
     } catch (err) {
