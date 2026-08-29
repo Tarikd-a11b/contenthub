@@ -132,9 +132,25 @@ body {
 .lp-go { transition: letter-spacing 0.3s cubic-bezier(0.22,1,0.36,1); }
 .lp-go:hover { letter-spacing: 0.06em; }
 
+/* ── kaynak evreni: yaklaşma girişi ──
+   Canvas'ın kendisi değil, onu saran bu wrapper ölçekleniyor — canvas'ın
+   boyut ölçümü (Constellation.tsx'te data-lp-host'a kadar yukarı bakan
+   host) dıştaki değişmeyen section'a bağlı, o yüzden bu animasyon sırasında
+   canvas'ın iç koordinat sistemi bozulmuyor, sadece görüntü ölçekleniyor. */
+.js .lp-approach {
+  opacity: 0;
+  transform: scale(0.86);
+  filter: blur(14px);
+  transition: opacity 1.05s cubic-bezier(0.22,1,0.36,1),
+              transform 1.15s cubic-bezier(0.22,1,0.36,1),
+              filter 1.05s cubic-bezier(0.22,1,0.36,1);
+}
+.js .lp-approach.on { opacity: 1; transform: scale(1); filter: blur(0); }
+
 /* ── hareket azaltma ── */
 @media (prefers-reduced-motion: reduce) {
   .js .lp-reveal { clip-path: none; opacity: 1; transition: none; }
+  .js .lp-approach { opacity: 1; transform: none; filter: none; transition: none; }
   .lp-h1 .turn::after,
   .lp-beat, .lp-cue { animation: none; }
   .lp-h1 .turn::after { transform: translateY(-0.04em) scale(1); opacity: 0.9; }

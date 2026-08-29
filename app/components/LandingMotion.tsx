@@ -5,6 +5,7 @@ import { useEffect } from 'react';
 /* Landing'in DOM-üstü davranışları — canvas dışındaki her şey:
    - .js sınıfı (reveal gizlemesini yalnızca JS varken aç)
    - satırların telden çıkar gibi açılması (stagger)
+   - kaynak evrenine yaklaşma (bulanık/küçük → net/tam boy)
    - zaman teli dolgusu (kaydırma = zamanda geriye)
    - tarih başlıklarının okuma kafasından geçerken parlaması
    - canlı saat
@@ -68,6 +69,27 @@ export default function LandingMotion() {
         });
       }, 3000);
       cleanups.push(() => clearTimeout(safety));
+    }
+
+    /* ── yaklaşma (kaynak evreni girişi) ── */
+    const approaches = Array.from(document.querySelectorAll<HTMLElement>('.lp-approach'));
+    if (approaches.length) {
+      if (reduce) {
+        approaches.forEach((el) => el.classList.add('on'));
+      } else {
+        const approachObs = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((e) => {
+              if (!e.isIntersecting) return;
+              (e.target as HTMLElement).classList.add('on');
+              approachObs.unobserve(e.target);
+            });
+          },
+          { threshold: 0, rootMargin: '0px 0px -15% 0px' }
+        );
+        approaches.forEach((el) => approachObs.observe(el));
+        cleanups.push(() => approachObs.disconnect());
+      }
     }
 
     /* ── zaman teli dolgusu ── */

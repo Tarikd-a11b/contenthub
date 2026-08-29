@@ -58,7 +58,10 @@ export default function Constellation() {
     const canvas: HTMLCanvasElement = canvasEl;
     const ctx: CanvasRenderingContext2D = context;
 
-    const host = canvas.parentElement as HTMLElement;
+    // Ölçüm her zaman en yakın [data-lp-host]'a bakar — canvas görsel
+    // olarak bir .lp-approach sarmalayıcısı içinde ölçeklense bile boyut
+    // hesaplaması sabit, dıştaki değişmeyen kapsayıcıdan yapılır.
+    const host = (canvas.closest('[data-lp-host]') as HTMLElement | null) || (canvas.parentElement as HTMLElement);
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const DPR = Math.min(window.devicePixelRatio || 1, 2);
 

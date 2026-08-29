@@ -67,7 +67,7 @@ export default function Landing() {
       </header>
 
       {/* ── takımyıldız sahnesi (tam ekran hero) ───────────────── */}
-      <section className="relative flex min-h-dvh flex-col justify-center overflow-hidden px-6">
+      <section data-lp-host className="relative flex min-h-dvh flex-col justify-center overflow-hidden px-6">
         <Constellation />
 
         {/* metnin arkasını okunur tut: sola doğru koyulaşan vignette */}
@@ -126,9 +126,14 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── kaynak evreni (tam genişlik takımyıldız, kendi bölümü) ─ */}
-      <section className="relative h-[60vh] overflow-hidden border-t border-border sm:h-[75vh]">
-        <Constellation />
+      {/* ── kaynak evreni (tam genişlik takımyıldız, kendi bölümü) ─
+           data-lp-host: Constellation'ın boyut ölçtüğü sabit kapsayıcı.
+           .lp-approach sarmalayıcısı görsel olarak ölçekleniyor ama bu
+           ölçüm noktasını etkilemiyor (bkz. Constellation.tsx). */}
+      <section data-lp-host className="relative h-[60vh] overflow-hidden border-t border-border sm:h-[75vh]">
+        <div className="lp-approach absolute inset-0">
+          <Constellation />
+        </div>
         <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] mx-auto max-w-5xl px-6">
           <div data-lp-mark className={`lp-dateline relative pt-[2.6rem] ${gutter}`}>
             <span aria-hidden className="absolute left-[calc(var(--lp-gutter)-2.1rem)] top-[3.35rem] h-px w-[1.35rem] bg-border" />
