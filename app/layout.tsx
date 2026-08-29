@@ -13,6 +13,23 @@ const geistMono = localFont({
   weight: "100 900",
 });
 
+// Manşet: Archivo'nun genişlik ekseniyle gazete gotiği duruşu.
+const archivo = localFont({
+  src: "./fonts/Archivo.ttf",
+  variable: "--font-archivo",
+  weight: "100 900",
+  display: "swap",
+});
+// Gövde/okuma: bu bir okuma ürünü, o yüzden serif. Roman + italik ayrı dosya.
+const newsreader = localFont({
+  src: [
+    { path: "./fonts/Newsreader.ttf", style: "normal", weight: "200 800" },
+    { path: "./fonts/Newsreader-Italic.ttf", style: "italic", weight: "200 800" },
+  ],
+  variable: "--font-newsreader",
+  display: "swap",
+});
+
 const SITE = "https://contenthub-self-nine.vercel.app";
 
 export const metadata: Metadata = {
@@ -49,7 +66,7 @@ export default function RootLayout({
   return (
     <html lang="tr">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${archivo.variable} ${newsreader.variable} antialiased`}
       >
         {children}
       </body>

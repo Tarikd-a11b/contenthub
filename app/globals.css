@@ -32,3 +32,110 @@ body {
   outline: 2px solid theme('colors.accent');
   outline-offset: 2px;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   AÇILIŞ SAYFASI — takımyıldız sahnesi + zaman teli
+   Buradaki her şey landing'e özgü. Açık isimli class'lar
+   kullanıldı ki Tailwind utility'leriyle çakışmasın.
+   ═══════════════════════════════════════════════════════════ */
+
+/* JS çalışıyorsa reveal gizlemesi devreye girer; çalışmazsa
+   içerik olduğu gibi görünür kalır (ilerlemeli iyileştirme). */
+.js .lp-reveal {
+  clip-path: inset(0 100% 0 0);
+  opacity: 0.15;
+  transition: clip-path 0.85s cubic-bezier(0.22,1,0.36,1), opacity 0.5s linear;
+}
+.js .lp-reveal.on { clip-path: inset(0 0 0 0); opacity: 1; }
+
+/* ── manşet tipografisi ── */
+.lp-h1 {
+  font-family: var(--font-archivo), system-ui, sans-serif;
+  font-variation-settings: 'wdth' 112, 'wght' 620;
+  font-size: clamp(2.5rem, 7vw, 4.9rem);
+  line-height: 0.99;
+  letter-spacing: -0.055em;
+  max-width: 13ch;
+}
+.lp-h1 .quiet {
+  font-variation-settings: 'wdth' 112, 'wght' 340;
+  color: theme('colors.muted');
+}
+/* Ödül satırı: gazete gotiğinden okuma serifine geçiş —
+   ürün "hız/gösteri"den "sükunet/okuma"ya geçtiğini söylüyor. */
+.lp-h1 .turn {
+  display: block;
+  margin-top: 0.12em;
+  font-family: var(--font-newsreader), Georgia, serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 0.92em;
+  letter-spacing: -0.02em;
+  color: theme('colors.foreground');
+}
+.lp-h1 .turn::after {
+  content: '';
+  display: inline-block;
+  width: 0.62em; height: 0.62em;
+  margin-left: 0.32em;
+  transform: translateY(-0.04em);
+  background: theme('colors.accent');
+  border-radius: 50%;
+  animation: lp-pending 3.4s cubic-bezier(0.22,1,0.36,1) infinite;
+}
+@keyframes lp-pending {
+  0%,100% { opacity: 0.9; transform: translateY(-0.04em) scale(1); }
+  50%     { opacity: 0.35; transform: translateY(-0.04em) scale(0.82); }
+}
+
+/* ── zaman damgası / nabız ── */
+.lp-beat {
+  width: 4px; height: 4px;
+  background: theme('colors.source.academic');
+  border-radius: 50%;
+  animation: lp-beat 2.4s ease-in-out infinite;
+}
+@keyframes lp-beat { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+/* ── scroll ipucu ── */
+.lp-cue { animation: lp-cue 3s cubic-bezier(0.22,1,0.36,1) infinite; }
+.lp-cue .bar {
+  width: 1px; height: 2.2rem;
+  background: linear-gradient(#2E2E3C, transparent);
+}
+@keyframes lp-cue { 0%,100% { opacity: 0.7; } 50% { opacity: 0.25; } }
+
+/* ── tel (feed) satır etkileşimi ── */
+.lp-item .lp-dot {
+  transition: transform 0.35s cubic-bezier(0.22,1,0.36,1);
+}
+.lp-item:hover .lp-dot { transform: translateX(-2px) scale(1.65); }
+.lp-item .lp-ago {
+  opacity: 0; transform: translateX(-0.4rem);
+  transition: opacity 0.3s cubic-bezier(0.22,1,0.36,1),
+              transform 0.3s cubic-bezier(0.22,1,0.36,1), color 0.3s;
+}
+.lp-item:hover .lp-ago { opacity: 1; transform: none; }
+.lp-item h3 { transition: color 0.25s; }
+.lp-item:hover h3 { color: #fff; }
+
+/* ── dateline: okuma kafasından geçerken parla ── */
+.lp-dateline time { transition: color 0.45s cubic-bezier(0.22,1,0.36,1); }
+.lp-dateline.lit time { color: theme('colors.foreground'); }
+
+/* ── zaman teli dolgusu ── */
+.lp-spine-fill {
+  transition: height 0.15s linear;
+}
+
+/* ── CTA alt çizgi genişlemesi ── */
+.lp-go { transition: letter-spacing 0.3s cubic-bezier(0.22,1,0.36,1); }
+.lp-go:hover { letter-spacing: 0.06em; }
+
+/* ── hareket azaltma ── */
+@media (prefers-reduced-motion: reduce) {
+  .js .lp-reveal { clip-path: none; opacity: 1; transition: none; }
+  .lp-h1 .turn::after,
+  .lp-beat, .lp-cue { animation: none; }
+  .lp-h1 .turn::after { transform: translateY(-0.04em) scale(1); opacity: 0.9; }
+}
