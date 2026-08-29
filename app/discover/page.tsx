@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { approveSuggestion, dismissSuggestion } from '@/lib/discovery';
+import { sourceProfileUrl } from '@/lib/profile';
 import NavBar from '@/app/components/NavBar';
 import DiscoveryAgent from '@/app/components/DiscoveryAgent';
 import SourceTypeDot from '@/app/components/SourceTypeDot';
@@ -77,20 +78,40 @@ export default function DiscoverPage() {
         <h1 className="text-xl font-semibold">Keşfet</h1>
         {error && <p className="text-sm text-red-400">{error}</p>}
         {suggestions.length === 0 && <p className="text-sm text-muted">Şu an öneri yok.</p>}
-        {suggestions.map((s) => (
-          <div
-            key={s.id}
-            className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4"
-          >
-            <div className="min-w-0">
-              <p className="text-[15px] font-semibold">{s.sources.name}</p>
+        {suggestions.map((s) => {
+          const href = sourceProfileUrl(s.sources.type, s.sources.url_or_handle);
+          const details = (
+            <>
+              {/* group-hover yalnızca link sarmalayıcısında etkili; linksiz durumda 'group' yok. */}
+              <p className="text-[15px] font-semibold group-hover:underline">{s.sources.name}</p>
               <p className="mt-1.5 flex items-center gap-2 font-mono text-xs tracking-wide text-muted">
                 <SourceTypeDot type={s.sources.type} />
                 <span className="truncate">
                   {s.sources.type} · {s.sources.url_or_handle}
                 </span>
               </p>
-            </div>
+            </>
+          );
+
+          return (
+          <div
+            key={s.id}
+            className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface p-4"
+          >
+            {href ? (
+              <a
+                href={href}
+                target="_blank"
+                rel="noreferrer"
+                title={`${s.sources.name} sayfasını aç, karar vermeden önce içeriğine bak`}
+                className="group min-w-0 flex-1"
+              >
+                {details}
+              </a>
+            ) : (
+              // Adres kurulamayan kaynak (ör. kırpılmış channel id) linklenmez.
+              <div className="min-w-0 flex-1">{details}</div>
+            )}
             <div className="flex shrink-0 gap-2">
               <button
                 onClick={() => handleApprove(s)}
@@ -106,7 +127,8 @@ export default function DiscoverPage() {
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
