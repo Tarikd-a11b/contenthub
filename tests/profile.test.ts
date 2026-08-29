@@ -93,6 +93,35 @@ describe('groupFollowedSources', () => {
     expect(groupFollowedSources(sources)).toHaveLength(1);
   });
 
+  it('merges when one platform\'s name has a " Blog" suffix the other lacks (real prod case)', () => {
+    const sources = [
+      src({ id: '1', name: 'Barış Özcan', type: 'youtube' }),
+      src({ id: '2', name: 'Barış Özcan Blog', type: 'blog' }),
+    ];
+    const people = groupFollowedSources(sources);
+    expect(people).toHaveLength(1);
+    expect(people[0].name).toBe('Barış Özcan');
+    expect(people[0].category).toBe('mixed');
+  });
+
+  it('merges when platforms use different descriptive suffixes for the same person (real prod case)', () => {
+    const sources = [
+      src({ id: '1', name: 'Yanis Varoufakis - English', type: 'x' }),
+      src({ id: '2', name: 'Yanis Varoufakis Blog', type: 'blog' }),
+    ];
+    const people = groupFollowedSources(sources);
+    expect(people).toHaveLength(1);
+    expect(people[0].name).toBe('Yanis Varoufakis');
+  });
+
+  it('does not merge unrelated sources that happen to share no core name', () => {
+    const sources = [
+      src({ id: '1', name: 'Sean Carroll - Mindscape Podcast', type: 'youtube' }),
+      src({ id: '2', name: 'World Science Festival (Brian Greene)', type: 'youtube' }),
+    ];
+    expect(groupFollowedSources(sources)).toHaveLength(2);
+  });
+
   it('keeps a single-platform source in its own type as the category', () => {
     const sources = [src({ id: '1', name: 'Veritasium', type: 'youtube' })];
     expect(groupFollowedSources(sources)[0].category).toBe('youtube');

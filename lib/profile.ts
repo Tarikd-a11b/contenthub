@@ -82,7 +82,23 @@ export type FollowedPerson = {
 };
 
 /**
- * Aynı isimdeki kaynakları (ör. bir kişinin hem YouTube hem blog kaydı) tek
+ * Kaynak isimlerine eklenen platform belirteçlerini atar (" Blog", " - English",
+ * "(Brian Greene)" gibi). Gerçek veride aynı kişi bu yüzden bambaşka string'lerle
+ * kayıtlı: "Barış Özcan" (youtube) / "Barış Özcan Blog" (blog), "Yanis Varoufakis
+ * Blog" (blog) / "Yanis Varoufakis - English" (x). Kaba isim eşleşmesi (sadece
+ * trim+lowercase) bu ikisini birleştiremiyordu — bu yüzden ek adım gerekti.
+ */
+function stripSourceNameSuffix(name: string): string {
+  const stripped = name
+    .replace(/\s+-\s+.+$/, '')
+    .replace(/\s*\([^)]*\)\s*$/, '')
+    .replace(/\s+(blog|blogu|kanalı|kanali|kanal|podcast|dergisi|sayfası|on x)$/i, '')
+    .trim();
+  return stripped || name.trim();
+}
+
+/**
+ * Aynı kişiye ait kaynakları (ör. bir kişinin hem YouTube hem blog kaydı) tek
  * karta indirger. İsim eşleşmesi kaba bir sezgi ama bu tabloda kişi/kaynak
  * ayrımını tutan başka bir alan yok (bkz. proje notları — şema değişikliği
  * gerektirmeden çözüm).
@@ -90,7 +106,7 @@ export type FollowedPerson = {
 export function groupFollowedSources(sources: FollowedSource[]): FollowedPerson[] {
   const byName = new Map<string, FollowedSource[]>();
   for (const source of sources) {
-    const key = source.name.trim().toLowerCase();
+    const key = stripSourceNameSuffix(source.name).toLowerCase();
     const group = byName.get(key);
     if (group) {
       group.push(source);
@@ -99,10 +115,10 @@ export function groupFollowedSources(sources: FollowedSource[]): FollowedPerson[
     }
   }
 
-  const people = Array.from(byName.values()).map((platforms): FollowedPerson => {
+  const people = Array.from(byName.entries()).map(([key, platforms]): FollowedPerson => {
     const types = new Set(platforms.map((p) => p.type));
     const category = (types.size === 1 ? platforms[0].type : 'mixed') as SourceCategory;
-    return { key: platforms[0].name.trim().toLowerCase(), name: platforms[0].name, category, platforms };
+    return { key, name: stripSourceNameSuffix(platforms[0].name), category, platforms };
   });
 
   return people.sort((a, b) => a.name.localeCompare(b.name, 'tr'));
