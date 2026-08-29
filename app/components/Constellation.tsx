@@ -4,8 +4,12 @@ import { useEffect, useRef } from 'react';
 
 /* Kaynak takımyıldızı: her düğüm bir kaynak, renk = tür. Yakın düğümler
    bağlanır; imleç yaklaşınca düğümler kaçar ve o bölgedeki bağlantılar
-   parlar, güçlü parıltıda kaynak adı belirir. Ürünün "senin seçtiğin
-   kaynaklar" fikrini soyut ama okunur bir ağ olarak gösterir. */
+   parlar, güçlü parıltıda kaynak adı belirir. İmleç sahnenin üstündeyken
+   canvas'ın TAMAMI imlecin durduğu noktaya doğru kamera gibi yakınlaşır
+   (transform-origin imleci takip eder, scale CSS geçişiyle yumuşar) —
+   nesne bize değil, biz nesneye yaklaşıyoruz; tıpkı kaydırmadaki evren-
+   zoom'u gibi. Ürünün "senin seçtiğin kaynaklar" fikrini soyut ama
+   okunur bir ağ olarak gösterir. */
 
 type Tur = 'youtube' | 'blog' | 'x' | 'academic';
 
@@ -69,6 +73,10 @@ export default function Constellation() {
     let nodes: Node[] = [];
     let raf = 0;
     const mouse = { x: -9999, y: -9999, active: false };
+
+    if (!reduce) {
+      canvas.style.transition = 'transform 0.5s cubic-bezier(0.22,1,0.36,1), transform-origin 0.15s linear';
+    }
 
     function resize() {
       const r = host.getBoundingClientRect();
@@ -190,8 +198,18 @@ export default function Constellation() {
       mouse.x = e.clientX - r.left;
       mouse.y = e.clientY - r.top;
       mouse.active = true;
+      if (!reduce) {
+        // Kamera imlece doğru yakınlaşıyor: transform-origin imleci
+        // takip eder, canvas'ın tamamı o noktaya doğru büyür.
+        canvas.style.transformOrigin = `${(mouse.x / W) * 100}% ${(mouse.y / H) * 100}%`;
+        canvas.style.transform = 'scale(1.38)';
+      }
     }
-    function onLeave() { mouse.active = false; mouse.x = mouse.y = -9999; }
+    function onLeave() {
+      mouse.active = false;
+      mouse.x = mouse.y = -9999;
+      if (!reduce) canvas.style.transform = 'scale(1)';
+    }
 
     host.addEventListener('pointermove', onMove);
     host.addEventListener('pointerleave', onLeave);
