@@ -242,6 +242,33 @@ export async function toggleSaved(
   if (error) throw error;
 }
 
+/**
+ * Birden çok içeriği TEK istekte okundu işaretler.
+ *
+ * Kaydırarak okundu işaretleme, sayfada 20 karta kadar aynı anda tetiklenebilir;
+ * her biri için ayrı upsert atmak 20 ağ isteği demekti. Tek `upsert` hepsini
+ * kapsıyor. markAsRead ile aynı çakışma kuralı: yalnızca read_at yazılıyor,
+ * satırdaki saved_at korunuyor.
+ *
+ * Boş dizide hiç istek atmıyor — çağıran taraf her kaydırma olayında
+ * çağırabilsin diye.
+ */
+export async function markManyAsRead(
+  supabase: SupabaseClient,
+  userId: string,
+  contentItemIds: string[],
+) {
+  if (contentItemIds.length === 0) return;
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('user_content_status')
+    .upsert(
+      contentItemIds.map((id) => ({ user_id: userId, content_item_id: id, read_at: now })),
+      { onConflict: 'user_id,content_item_id' },
+    );
+  if (error) throw error;
+}
+
 export async function markAsRead(supabase: SupabaseClient, userId: string, contentItemId: string) {
   const { error } = await supabase
     .from('user_content_status')

@@ -10,6 +10,7 @@ type Props = {
   focusedId: string | null;
   onRead: (item: FeedItem) => void;
   onToggleSave: (item: FeedItem) => void;
+  onScrolledPast: (item: FeedItem) => void;
 };
 
 /**
@@ -18,7 +19,7 @@ type Props = {
  * `layout` animasyonu framer-motion'ın ölçtüğü gerçek DOM konumlarına göre
  * çalıştığı için altta grid ya da columns olması fark etmiyor.
  */
-export default function FeedGrid({ groups, focusedId, onRead, onToggleSave }: Props) {
+export default function FeedGrid({ groups, focusedId, onRead, onToggleSave, onScrolledPast }: Props) {
   return (
     <div className="mt-2">
       {groups.map((group) => (
@@ -40,6 +41,7 @@ export default function FeedGrid({ groups, focusedId, onRead, onToggleSave }: Pr
                   isFocused={item.id === focusedId}
                   onRead={onRead}
                   onToggleSave={onToggleSave}
+                  onScrolledPast={onScrolledPast}
                 />
               ))}
             </AnimatePresence>

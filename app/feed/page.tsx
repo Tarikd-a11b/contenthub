@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import {
   sortFeedByRecency,
   markAsRead,
+  markManyAsRead,
   groupFeedByDay,
   feedPage,
   feedPageCount,
@@ -192,6 +193,60 @@ export default function FeedPage() {
     }
   }
 
+  /* ── Kaydırınca otomatik okundu ────────────────────────────────────────────
+     Ekranda görünüp yukarıdan çıkan kartlar okundu sayılıyor. Geri alınamayan
+     bir işlem olduğu için iki koruma var: (1) kart GERÇEKTEN görünmüş olmalı
+     (FeedCard'daki `goruldu` kontrolü), (2) kullanıcı bunu kapatabiliyor ve
+     tercih localStorage'da kalıcı.
+
+     Yazmalar 800ms'lik bir pencerede biriktirilip TEK upsert'e indiriliyor:
+     hızlı kaydırmada 20 karta 20 ayrı istek atmak yerine bir istek. */
+  const [otomatikOkundu, setOtomatikOkundu] = useState(false);
+  useEffect(() => {
+    try {
+      setOtomatikOkundu(window.localStorage.getItem('contenthub:autoRead') === 'acik');
+    } catch {
+      /* localStorage kapalı olabilir (gizli sekme, site verisi engelli) — varsayılan kapalı. */
+    }
+  }, []);
+
+  function otomatikOkunduDegistir(acik: boolean) {
+    setOtomatikOkundu(acik);
+    try {
+      window.localStorage.setItem('contenthub:autoRead', acik ? 'acik' : 'kapali');
+    } catch {
+      /* yazılamazsa tercih yalnızca bu oturum için geçerli olur */
+    }
+  }
+
+  const bekleyen = useRef<Set<string>>(new Set());
+  const zamanlayici = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleScrolledPast = useCallback(
+    (item: FeedItem) => {
+      if (!userId || !otomatikOkundu) return;
+      bekleyen.current.add(item.id);
+      if (zamanlayici.current) clearTimeout(zamanlayici.current);
+      zamanlayici.current = setTimeout(async () => {
+        const idler = Array.from(bekleyen.current);
+        bekleyen.current.clear();
+        if (idler.length === 0) return;
+        // İyimser güncelleme: sayaç anında düşsün. Hata olursa geri alınıyor.
+        setItems((prev) => prev.map((i) => (idler.includes(i.id) ? { ...i, is_read: true } : i)));
+        try {
+          await markManyAsRead(supabase, userId, idler);
+        } catch (err) {
+          setItems((prev) => prev.map((i) => (idler.includes(i.id) ? { ...i, is_read: false } : i)));
+          setError(err instanceof Error ? err.message : 'Otomatik okundu işaretlenemedi');
+        }
+      }, 800);
+    },
+    [supabase, userId, otomatikOkundu],
+  );
+
+  // Sayfa kapanırken/ayrılırken bekleyen zamanlayıcıyı temizle.
+  useEffect(() => () => { if (zamanlayici.current) clearTimeout(zamanlayici.current); }, []);
+
   return (
     <div>
       <NavBar />
@@ -217,6 +272,8 @@ export default function FeedPage() {
             turSayilari={turSayilari}
             okunmamis={okunmamis}
             kayitli={kayitliSayisi}
+            otomatikOkundu={otomatikOkundu}
+            setOtomatikOkundu={otomatikOkunduDegistir}
           />
         )}
 
@@ -239,6 +296,7 @@ export default function FeedPage() {
               focusedId={pageItems[odakIndeksi]?.id ?? null}
               onRead={handleRead}
               onToggleSave={handleSave}
+              onScrolledPast={handleScrolledPast}
             />
 
             {totalPages > 1 && (
@@ -302,6 +360,7 @@ const TUR_NOKTA: Record<string, string> = {
 
 function FiltreSeridi({
   filtre, setFiltre, turDegistir, turSayilari, okunmamis, kayitli,
+  otomatikOkundu, setOtomatikOkundu,
 }: {
   filtre: FeedFilter;
   setFiltre: (f: FeedFilter) => void;
@@ -309,6 +368,8 @@ function FiltreSeridi({
   turSayilari: Record<string, number>;
   okunmamis: number;
   kayitli: number;
+  otomatikOkundu: boolean;
+  setOtomatikOkundu: (acik: boolean) => void;
 }) {
   // Yalnızca GERÇEKTEN içeriği olan türler rozet alıyor. Akışında hiç akademik
   // içerik yokken o rozeti göstermek, tıklayınca boş ekran veren bir vaat olurdu.
@@ -373,6 +434,23 @@ function FiltreSeridi({
           Filtreyi temizle
         </button>
       )}
+
+      {/* Geri alınamayan bir davranış olduğu için kapatılabilir ve VARSAYILAN
+          KAPALI: kullanıcı açtığında ne olacağını bilerek açsın. */}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={otomatikOkundu}
+        onClick={() => setOtomatikOkundu(!otomatikOkundu)}
+        title="Açıkken, ekranda görünüp yukarı kaydırdığın içerikler okundu sayılır"
+        className={`${temel} ml-auto ${otomatikOkundu ? acik : kapali}`}
+      >
+        <span
+          aria-hidden
+          className={`h-1.5 w-1.5 rounded-full ${otomatikOkundu ? 'bg-accent' : 'bg-muted'}`}
+        />
+        Kaydırınca okundu
+      </button>
     </div>
   );
 }

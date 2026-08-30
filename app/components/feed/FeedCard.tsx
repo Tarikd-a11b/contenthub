@@ -14,6 +14,8 @@ type Props = {
   isFocused: boolean;
   onRead: (item: FeedItem) => void;
   onToggleSave: (item: FeedItem) => void;
+  /** Kart GÖRÜLDÜKTEN sonra viewport'un üstünden çıktığında bir kez çağrılır. */
+  onScrolledPast: (item: FeedItem) => void;
 };
 
 const cardVariants = {
@@ -41,28 +43,45 @@ function ozet(item: FeedItem): string | null {
   return item.is_read ? null : cleanSummary(item.summary);
 }
 
-export default function FeedCard({ item, isFocused, onRead, onToggleSave }: Props) {
+export default function FeedCard({ item, isFocused, onRead, onToggleSave, onScrolledPast }: Props) {
   const accent = categoryAccent(item.content_type);
   const summary = ozet(item);
   const dakika = item.content_type === 'blog' ? estimateReadingMinutes(item.summary) : null;
 
-  /* "Yukarıda kaldı" sönükleşmesi: kart viewport'un ÜSTÜNDEN çıktığında %60
-     saydamlığa iniyor, geri kaydırınca eski haline dönüyor. Yalnızca görsel —
-     içeriği okundu SAYMIYOR (bkz. FeedGrid/sayfa notu: kaydırmayla otomatik
-     okundu işaretlemek, kullanıcının okumadığı 287 içeriği geri alınamaz
-     biçimde okundu yapardı). */
+  /* "Yukarıda kaldı" durumu iki şey yapıyor: kart %60 saydamlığa iniyor VE
+     (sayfa açıksa) okundu işaretlenmesi için haber veriliyor.
+
+     `goruldu` şart: yalnızca GERÇEKTEN ekranda görünmüş bir kart okundu
+     sayılabilir. Bu kontrol olmasaydı, ilk render'da viewport'un üstünde
+     kalan (ör. tarayıcı kaydırma konumunu geri yüklediğinde) kartlar hiç
+     görülmeden okundu işaretlenirdi. */
   const ref = useRef<HTMLElement>(null);
   const [gecildi, setGecildi] = useState(false);
+  const goruldu = useRef(false);
+  const bildirildi = useRef(false);
+
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
     const gozlemci = new IntersectionObserver(
-      ([giris]) => setGecildi(!giris.isIntersecting && giris.boundingClientRect.top < 0),
+      ([giris]) => {
+        if (giris.isIntersecting) goruldu.current = true;
+        setGecildi(!giris.isIntersecting && giris.boundingClientRect.top < 0);
+      },
       { threshold: 0 },
     );
     gozlemci.observe(el);
     return () => gozlemci.disconnect();
   }, []);
+
+  // Kart başına TEK bildirim (bildirildi guard'ı): aynı kart aşağı-yukarı
+  // kaydırıldıkça tekrar tekrar istek atmasın.
+  useEffect(() => {
+    if (gecildi && goruldu.current && !item.is_read && !bildirildi.current) {
+      bildirildi.current = true;
+      onScrolledPast(item);
+    }
+  }, [gecildi, item, onScrolledPast]);
 
   return (
     <motion.article
