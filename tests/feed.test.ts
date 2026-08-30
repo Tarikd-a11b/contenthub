@@ -8,6 +8,7 @@ import {
   feedPageCount,
   decodeEntities,
   cleanSummary,
+  estimateReadingMinutes,
   filterFeed,
   typeCounts,
   FILTRE_YOK,
@@ -211,6 +212,18 @@ describe('cleanSummary', () => {
 
   it('sinirin altindaki metne ... eklemez', () => {
     expect(cleanSummary('kisa metin', 180)).toBe('kisa metin');
+  });
+});
+
+describe('estimateReadingMinutes', () => {
+  it('returns null when there is no summary text', () => {
+    expect(estimateReadingMinutes(null)).toBeNull();
+    expect(estimateReadingMinutes('<div></div>')).toBeNull();
+  });
+
+  it('rounds to whole minutes at ~200 words/min, minimum 1', () => {
+    expect(estimateReadingMinutes('kelime ')).toBe(1);
+    expect(estimateReadingMinutes('kelime '.repeat(400))).toBe(2);
   });
 });
 

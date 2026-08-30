@@ -10,18 +10,23 @@ const INITIAL_CLASSES: Record<string, string> = {
   academic: 'text-source-academic',
 };
 
-const BOX = 'h-[72px] w-32 shrink-0 rounded-md border border-border bg-surface';
+const BOX_BY_VARIANT: Record<'row' | 'card', string> = {
+  row: 'h-[72px] w-32 shrink-0 rounded-md border border-border bg-surface',
+  // 'card': masonry redesign'ında tam genişlik, orana göre yükseklik.
+  card: 'aspect-video w-full rounded-md border border-border bg-surface',
+};
 
-type Props = { url: string; contentType: string; sourceName: string };
+type Props = { url: string; contentType: string; sourceName: string; variant?: 'row' | 'card' };
 
-export default function FeedThumbnail({ url, contentType, sourceName }: Props) {
+export default function FeedThumbnail({ url, contentType, sourceName, variant = 'row' }: Props) {
   const thumb = youtubeThumbnail(url);
   const [src, setSrc] = useState<string | null>(thumb?.src ?? null);
+  const box = BOX_BY_VARIANT[variant];
 
   if (!src) {
     const initial = sourceName.trim().charAt(0).toLocaleUpperCase('tr-TR') || '·';
     return (
-      <div className={`${BOX} flex items-center justify-center`} aria-hidden>
+      <div className={`${box} flex items-center justify-center`} aria-hidden>
         <span className={`font-mono text-lg ${INITIAL_CLASSES[contentType] ?? 'text-muted'}`}>{initial}</span>
       </div>
     );
@@ -35,7 +40,7 @@ export default function FeedThumbnail({ url, contentType, sourceName }: Props) {
       src={src}
       alt=""
       loading="lazy"
-      className={`${BOX} object-cover`}
+      className={`${box} object-cover`}
       onError={() => setSrc(thumb?.fallback && src !== thumb.fallback ? thumb.fallback : null)}
     />
   );
