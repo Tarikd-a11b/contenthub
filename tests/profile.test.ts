@@ -43,6 +43,14 @@ describe('sourceProfileUrl', () => {
     expect(sourceProfileUrl('youtube', 'UCshort')).toBeNull();
   });
 
+  it('returns null for a youtube/x source whose "handle" is actually a bare site path (real prod cases)', () => {
+    // Discovery yazdı, canlıda bulundu: bunlar @handle değil, bir web adresinin
+    // yolu. '/@site.com%2Fpath' gibi kırık bir link üretmek yerine null dönmeli.
+    expect(sourceProfileUrl('youtube', 'preposterousuniverse.com/podcast')).toBeNull();
+    expect(sourceProfileUrl('youtube', 'youtube.com/CosmologyTalks')).toBeNull();
+    expect(sourceProfileUrl('x', 'somesite.com/profile')).toBeNull();
+  });
+
   it('returns null for empty input and unknown types', () => {
     expect(sourceProfileUrl('youtube', '   ')).toBeNull();
     expect(sourceProfileUrl('x', '@')).toBeNull();

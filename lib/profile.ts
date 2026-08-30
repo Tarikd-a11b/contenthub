@@ -29,8 +29,16 @@ export function sourceProfileUrl(type: string, urlOrHandle: string): string | nu
       if (/^UC[\w-]{22}$/.test(handle)) return `https://www.youtube.com/channel/${handle}`;
       // UC ile başlayıp geçerli uzunlukta olmayan değer bozuk bir channel id demek.
       if (/^UC/.test(handle)) return null;
+      // Gerçek YouTube handle'ı '/' içermez. Discovery bazen bu alana çıplak bir
+      // site/yol yazıyor ("preposterousuniverse.com/podcast",
+      // "youtube.com/CosmologyTalks") — @handle gibi paketlemek kırık bir
+      // youtube.com/@... linki üretir (canlıda bulundu, bkz. proje notları).
+      if (handle.includes('/')) return null;
       return `https://www.youtube.com/@${encodeURIComponent(handle)}`;
     case 'x':
+      // Aynı sınıf sorun x tipinde de mümkün (bkz. youtube dalındaki not) —
+      // gerçek bir X handle'ı da '/' içermez.
+      if (handle.includes('/')) return null;
       return `https://x.com/${encodeURIComponent(handle)}`;
     case 'blog':
     case 'academic':
