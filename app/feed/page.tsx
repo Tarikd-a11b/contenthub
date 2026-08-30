@@ -1,16 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import {
   sortFeedByRecency,
   markAsRead,
+  markManyAsRead,
   groupFeedByDay,
   feedPage,
   feedPageCount,
   decodeEntities,
-  cleanSummary,
   FEED_FETCH_LIMIT,
   toggleSaved,
   filterFeed,
@@ -20,8 +20,7 @@ import {
   type FeedItem,
 } from '@/lib/feed';
 import NavBar from '@/app/components/NavBar';
-import SourceTypeDot from '@/app/components/SourceTypeDot';
-import FeedThumbnail from '@/app/components/FeedThumbnail';
+import FeedGrid from '@/app/components/feed/FeedGrid';
 
 export default function FeedPage() {
   const supabase = createClient();
@@ -105,7 +104,8 @@ export default function FeedPage() {
   // sayfada üç satır kalırdı ve sayaç yalan söylerdi.
   const suzulmus = useMemo(() => filterFeed(items, filtre), [items, filtre]);
   const totalPages = feedPageCount(suzulmus.length);
-  const groups = useMemo(() => groupFeedByDay(feedPage(suzulmus, page)), [suzulmus, page]);
+  const pageItems = useMemo(() => feedPage(suzulmus, page), [suzulmus, page]);
+  const groups = useMemo(() => groupFeedByDay(pageItems), [pageItems]);
   const okunmamis = items.filter((i) => !i.is_read).length;
   const turSayilari = useMemo(() => typeCounts(items), [items]);
   const kayitliSayisi = items.filter((i) => i.is_saved).length;
@@ -114,6 +114,48 @@ export default function FeedPage() {
   // Filtre değişince sayfa 1'e dönmeli; yoksa 4. sayfadayken daraltma yapınca
   // boş bir sayfaya bakıyor olurdun.
   useEffect(() => { setPage(1); }, [filtre]);
+
+  // Klavye gezinmesi: J/K odağı taşır, E arşivler (okundu say), S kaydeder,
+  // Enter açar. Yazı kutusu odaktayken (bu sayfada yok ama ileride olabilir)
+  // müdahale etmiyor.
+  const [odakIndeksi, setOdakIndeksi] = useState(0);
+  useEffect(() => {
+    setOdakIndeksi((i) => (pageItems.length === 0 ? 0 : Math.min(i, pageItems.length - 1)));
+  }, [pageItems.length]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      const etiket = (document.activeElement?.tagName || '').toLowerCase();
+      if (etiket === 'input' || etiket === 'textarea' || pageItems.length === 0) return;
+
+      const secili = pageItems[odakIndeksi];
+      switch (e.key.toLowerCase()) {
+        case 'j':
+          e.preventDefault();
+          setOdakIndeksi((i) => Math.min(i + 1, pageItems.length - 1));
+          break;
+        case 'k':
+          e.preventDefault();
+          setOdakIndeksi((i) => Math.max(i - 1, 0));
+          break;
+        case 'e':
+          if (secili) handleRead(secili);
+          break;
+        case 's':
+          if (secili) handleSave(secili);
+          break;
+        case 'enter':
+          if (secili) {
+            handleRead(secili);
+            window.open(secili.url, '_blank', 'noreferrer');
+          }
+          break;
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageItems, odakIndeksi]);
 
   function turDegistir(tur: string) {
     setFiltre((o) => ({
@@ -151,6 +193,60 @@ export default function FeedPage() {
     }
   }
 
+  /* ── Kaydırınca otomatik okundu ────────────────────────────────────────────
+     Ekranda görünüp yukarıdan çıkan kartlar okundu sayılıyor. Geri alınamayan
+     bir işlem olduğu için iki koruma var: (1) kart GERÇEKTEN görünmüş olmalı
+     (FeedCard'daki `goruldu` kontrolü), (2) kullanıcı bunu kapatabiliyor ve
+     tercih localStorage'da kalıcı.
+
+     Yazmalar 800ms'lik bir pencerede biriktirilip TEK upsert'e indiriliyor:
+     hızlı kaydırmada 20 karta 20 ayrı istek atmak yerine bir istek. */
+  const [otomatikOkundu, setOtomatikOkundu] = useState(false);
+  useEffect(() => {
+    try {
+      setOtomatikOkundu(window.localStorage.getItem('contenthub:autoRead') === 'acik');
+    } catch {
+      /* localStorage kapalı olabilir (gizli sekme, site verisi engelli) — varsayılan kapalı. */
+    }
+  }, []);
+
+  function otomatikOkunduDegistir(acik: boolean) {
+    setOtomatikOkundu(acik);
+    try {
+      window.localStorage.setItem('contenthub:autoRead', acik ? 'acik' : 'kapali');
+    } catch {
+      /* yazılamazsa tercih yalnızca bu oturum için geçerli olur */
+    }
+  }
+
+  const bekleyen = useRef<Set<string>>(new Set());
+  const zamanlayici = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleScrolledPast = useCallback(
+    (item: FeedItem) => {
+      if (!userId || !otomatikOkundu) return;
+      bekleyen.current.add(item.id);
+      if (zamanlayici.current) clearTimeout(zamanlayici.current);
+      zamanlayici.current = setTimeout(async () => {
+        const idler = Array.from(bekleyen.current);
+        bekleyen.current.clear();
+        if (idler.length === 0) return;
+        // İyimser güncelleme: sayaç anında düşsün. Hata olursa geri alınıyor.
+        setItems((prev) => prev.map((i) => (idler.includes(i.id) ? { ...i, is_read: true } : i)));
+        try {
+          await markManyAsRead(supabase, userId, idler);
+        } catch (err) {
+          setItems((prev) => prev.map((i) => (idler.includes(i.id) ? { ...i, is_read: false } : i)));
+          setError(err instanceof Error ? err.message : 'Otomatik okundu işaretlenemedi');
+        }
+      }, 800);
+    },
+    [supabase, userId, otomatikOkundu],
+  );
+
+  // Sayfa kapanırken/ayrılırken bekleyen zamanlayıcıyı temizle.
+  useEffect(() => () => { if (zamanlayici.current) clearTimeout(zamanlayici.current); }, []);
+
   return (
     <div>
       <NavBar />
@@ -176,6 +272,8 @@ export default function FeedPage() {
             turSayilari={turSayilari}
             okunmamis={okunmamis}
             kayitli={kayitliSayisi}
+            otomatikOkundu={otomatikOkundu}
+            setOtomatikOkundu={otomatikOkunduDegistir}
           />
         )}
 
@@ -193,80 +291,13 @@ export default function FeedPage() {
           <SonucYok onTemizle={() => setFiltre(FILTRE_YOK)} />
         ) : (
           <>
-            <div className="mt-10">
-              {groups.map((group) => (
-                /* Landing sayfasıyla aynı dil: gün, satırların solunda yapısal bir
-                   işaret olarak duruyor. Sıralamayı zaman yaptığı için tarih
-                   başlıktan daha büyük — okuyucu önce güne, sonra içeriğe bakıyor. */
-                /* Kolon 10rem: "23 Ağustos" 8rem'e sığmayıp iki satıra kırılıyordu. */
-                <section key={group.key} className="grid grid-cols-1 gap-x-8 sm:grid-cols-[10rem_1fr]">
-                  <div className="pt-6">
-                    <h2 className="font-mono text-[clamp(1.15rem,2.2vw,1.6rem)] font-medium leading-none tracking-tight text-muted">
-                      {group.label}
-                    </h2>
-                  </div>
-
-                  <ul className="border-l border-border pl-5 sm:pl-7">
-                    {group.items.map((item) => (
-                      /* Kaydet düğmesi <a>'nın İÇİNE konamaz (geçersiz HTML ve
-                         tıklama çakışır); kardeş olarak konumlandırılıyor. */
-                      <li key={item.id} className="relative">
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={() => handleRead(item)}
-                          className="group/satir -mx-3 flex gap-4 rounded-lg py-3.5 pl-3 pr-12 transition-colors hover:bg-surface"
-                        >
-                          <div className={item.is_read ? 'opacity-40 transition-opacity' : ''}>
-                            <FeedThumbnail url={item.url} contentType={item.content_type} sourceName={item.source_name} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            {/* Okunmuş içerik silinmiyor, ağırlığını kaybediyor:
-                                başlık sönükleşiyor ama okunur kalıyor. Eskiden tüm
-                                satır %50 saydamdı ve kaynak adı da okunmaz oluyordu. */}
-                            <p
-                              className={`text-[15px] leading-snug transition-colors ${
-                                item.is_read ? 'font-normal text-muted' : 'font-medium text-foreground'
-                              }`}
-                            >
-                              {item.title}
-                            </p>
-                            {ozet(item) && (
-                              /* line-clamp-2: özet uzunluğu kaynaktan kaynağa çok
-                                 değişiyor; satır sayısını sabitlemek listenin ritmini
-                                 koruyor. Okunmuşlarda büsbütün gizleniyor — o satır
-                                 artık karar vermene yaramaz, yalnızca yer kaplar. */
-                              <p className="mt-1.5 line-clamp-2 text-[13.5px] leading-relaxed text-muted">
-                                {ozet(item)}
-                              </p>
-                            )}
-                            <p className="mt-1.5 flex items-center gap-2 font-mono text-xs tracking-wide text-muted">
-                              <SourceTypeDot type={item.content_type} />
-                              {item.source_name}
-                            </p>
-                          </div>
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => handleSave(item)}
-                          aria-pressed={item.is_saved}
-                          aria-label={item.is_saved ? 'Kaydı kaldır' : 'Sonra oku'}
-                          title={item.is_saved ? 'Kaydı kaldır' : 'Sonra oku'}
-                          className={`absolute right-1 top-4 rounded-md p-2 transition-colors ${
-                            item.is_saved
-                              ? 'text-accent'
-                              : 'text-transparent hover:text-muted focus-visible:text-muted group-hover/satir:text-muted'
-                          }`}
-                        >
-                          <BookmarkIkonu dolu={item.is_saved} />
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))}
-            </div>
+            <FeedGrid
+              groups={groups}
+              focusedId={pageItems[odakIndeksi]?.id ?? null}
+              onRead={handleRead}
+              onToggleSave={handleSave}
+              onScrolledPast={handleScrolledPast}
+            />
 
             {totalPages > 1 && (
               <nav className="mt-14 flex items-center justify-center gap-5 font-mono text-xs">
@@ -329,6 +360,7 @@ const TUR_NOKTA: Record<string, string> = {
 
 function FiltreSeridi({
   filtre, setFiltre, turDegistir, turSayilari, okunmamis, kayitli,
+  otomatikOkundu, setOtomatikOkundu,
 }: {
   filtre: FeedFilter;
   setFiltre: (f: FeedFilter) => void;
@@ -336,6 +368,8 @@ function FiltreSeridi({
   turSayilari: Record<string, number>;
   okunmamis: number;
   kayitli: number;
+  otomatikOkundu: boolean;
+  setOtomatikOkundu: (acik: boolean) => void;
 }) {
   // Yalnızca GERÇEKTEN içeriği olan türler rozet alıyor. Akışında hiç akademik
   // içerik yokken o rozeti göstermek, tıklayınca boş ekran veren bir vaat olurdu.
@@ -400,6 +434,23 @@ function FiltreSeridi({
           Filtreyi temizle
         </button>
       )}
+
+      {/* Geri alınamayan bir davranış olduğu için kapatılabilir ve VARSAYILAN
+          KAPALI: kullanıcı açtığında ne olacağını bilerek açsın. */}
+      <button
+        type="button"
+        role="switch"
+        aria-checked={otomatikOkundu}
+        onClick={() => setOtomatikOkundu(!otomatikOkundu)}
+        title="Açıkken, ekranda görünüp yukarı kaydırdığın içerikler okundu sayılır"
+        className={`${temel} ml-auto ${otomatikOkundu ? acik : kapali}`}
+      >
+        <span
+          aria-hidden
+          className={`h-1.5 w-1.5 rounded-full ${otomatikOkundu ? 'bg-accent' : 'bg-muted'}`}
+        />
+        Kaydırınca okundu
+      </button>
     </div>
   );
 }
@@ -422,12 +473,6 @@ function SonucYok({ onTemizle }: { onTemizle: () => void }) {
       </button>
     </div>
   );
-}
-
-/** Okunmuş içerikte özet gösterilmiyor: satırın işi "açayım mı?" sorusuna cevap
- *  vermek; o karar verilmişse özet yalnızca gürültü. */
-function ozet(item: FeedItem): string | null {
-  return item.is_read ? null : cleanSummary(item.summary);
 }
 
 /** Boş ekran bir çıkmaz değil, bir davet: ne olduğunu söyler ve tek bir yol gösterir. */

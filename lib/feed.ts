@@ -76,6 +76,19 @@ export function cleanSummary(raw: string | null | undefined, max = 180): string 
   return (bosluk > max * 0.6 ? kirpik.slice(0, bosluk) : kirpik).trimEnd() + '…';
 }
 
+/**
+ * Blog kartlarında "N dk okuma" rozeti için kaba bir tahmin. Backend'de gerçek
+ * bir okuma süresi/kelime sayısı yok — tek elimizdeki metin `summary`, o da
+ * genelde tam içeriğin yalnızca ilk birkaç cümlesi. Bu yüzden bu bir TAHMİN,
+ * gerçek makale uzunluğunu değil özet uzunluğunu ölçüyor; en az 1 dk gösterir.
+ */
+export function estimateReadingMinutes(summary: string | null): number | null {
+  const clean = cleanSummary(summary, 4000);
+  if (!clean) return null;
+  const kelime = clean.split(/\s+/).filter(Boolean).length;
+  return Math.max(1, Math.round(kelime / 200));
+}
+
 export function sortFeedByRecency(items: FeedItem[]): FeedItem[] {
   return [...items].sort((a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime());
 }
@@ -225,6 +238,33 @@ export async function toggleSaved(
     .upsert(
       { user_id: userId, content_item_id: contentItemId, saved_at: saved ? new Date().toISOString() : null },
       { onConflict: 'user_id,content_item_id' }
+    );
+  if (error) throw error;
+}
+
+/**
+ * Birden çok içeriği TEK istekte okundu işaretler.
+ *
+ * Kaydırarak okundu işaretleme, sayfada 20 karta kadar aynı anda tetiklenebilir;
+ * her biri için ayrı upsert atmak 20 ağ isteği demekti. Tek `upsert` hepsini
+ * kapsıyor. markAsRead ile aynı çakışma kuralı: yalnızca read_at yazılıyor,
+ * satırdaki saved_at korunuyor.
+ *
+ * Boş dizide hiç istek atmıyor — çağıran taraf her kaydırma olayında
+ * çağırabilsin diye.
+ */
+export async function markManyAsRead(
+  supabase: SupabaseClient,
+  userId: string,
+  contentItemIds: string[],
+) {
+  if (contentItemIds.length === 0) return;
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from('user_content_status')
+    .upsert(
+      contentItemIds.map((id) => ({ user_id: userId, content_item_id: id, read_at: now })),
+      { onConflict: 'user_id,content_item_id' },
     );
   if (error) throw error;
 }

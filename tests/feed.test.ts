@@ -2,12 +2,14 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   sortFeedByRecency,
   markAsRead,
+  markManyAsRead,
   groupFeedByDay,
   youtubeThumbnail,
   feedPage,
   feedPageCount,
   decodeEntities,
   cleanSummary,
+  estimateReadingMinutes,
   filterFeed,
   typeCounts,
   FILTRE_YOK,
@@ -139,6 +141,37 @@ describe('markAsRead', () => {
   });
 });
 
+describe('markManyAsRead', () => {
+  it('marks every id in a SINGLE upsert call', async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const supabase = { from: vi.fn().mockReturnValue({ upsert }) };
+
+    // deno-lint-ignore no-explicit-any
+    await markManyAsRead(supabase as any, 'user-1', ['a', 'b', 'c']);
+
+    expect(upsert).toHaveBeenCalledTimes(1);
+    const [rows, opts] = upsert.mock.calls[0];
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r: { content_item_id: string }) => r.content_item_id)).toEqual(['a', 'b', 'c']);
+    expect(rows.every((r: { user_id: string; read_at: string }) => r.user_id === 'user-1' && !!r.read_at)).toBe(true);
+    expect(opts).toEqual({ onConflict: 'user_id,content_item_id' });
+  });
+
+  it('does not touch the network for an empty list', async () => {
+    const supabase = { from: vi.fn() };
+    // deno-lint-ignore no-explicit-any
+    await markManyAsRead(supabase as any, 'user-1', []);
+    expect(supabase.from).not.toHaveBeenCalled();
+  });
+
+  it('throws when supabase reports an error', async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: { message: 'nope' } });
+    const supabase = { from: vi.fn().mockReturnValue({ upsert }) };
+    // deno-lint-ignore no-explicit-any
+    await expect(markManyAsRead(supabase as any, 'user-1', ['a'])).rejects.toBeTruthy();
+  });
+});
+
 describe('decodeEntities', () => {
   // Bu iki dize CANLI veritabanindan alindi (2026-08-25) - akista harfi harfine
   // boyle goruluyordu.
@@ -211,6 +244,18 @@ describe('cleanSummary', () => {
 
   it('sinirin altindaki metne ... eklemez', () => {
     expect(cleanSummary('kisa metin', 180)).toBe('kisa metin');
+  });
+});
+
+describe('estimateReadingMinutes', () => {
+  it('returns null when there is no summary text', () => {
+    expect(estimateReadingMinutes(null)).toBeNull();
+    expect(estimateReadingMinutes('<div></div>')).toBeNull();
+  });
+
+  it('rounds to whole minutes at ~200 words/min, minimum 1', () => {
+    expect(estimateReadingMinutes('kelime ')).toBe(1);
+    expect(estimateReadingMinutes('kelime '.repeat(400))).toBe(2);
   });
 });
 
