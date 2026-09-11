@@ -40,13 +40,15 @@ body {
    ═══════════════════════════════════════════════════════════ */
 
 /* JS çalışıyorsa reveal gizlemesi devreye girer; çalışmazsa
-   içerik olduğu gibi görünür kalır (ilerlemeli iyileştirme). */
+   içerik olduğu gibi görünür kalır (ilerlemeli iyileştirme).
+   Negatif inset: clip-path kutunun dışını keser — kutudan taşan çocuklar
+   (adım etiketi -top, teldeki lp-dot -2.1rem sol) aksi halde yarım görünür. */
 .js .lp-reveal {
-  clip-path: inset(0 100% 0 0);
+  clip-path: inset(-1rem 100% -1rem -3rem);
   opacity: 0.15;
   transition: clip-path 0.85s cubic-bezier(0.22,1,0.36,1), opacity 0.5s linear;
 }
-.js .lp-reveal.on { clip-path: inset(0 0 0 0); opacity: 1; }
+.js .lp-reveal.on { clip-path: inset(-1rem -1rem -1rem -3rem); opacity: 1; }
 
 /* ── manşet tipografisi ── */
 .lp-h1 {
